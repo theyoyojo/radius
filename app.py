@@ -57,7 +57,7 @@ def application(env, SR):
             USERS_DB = 'users.test.db'
             SESSIONS_DB = 'sessions.test.db'
 
-	DP("New request: path_info=\"%s\", queries=\"%s\"" \
+	DEBUG("New request: path_info=\"%s\", queries=\"%s\"" \
 		% (str(path_info), str(queries)))
     
     # cgit exception should be handled by nginx

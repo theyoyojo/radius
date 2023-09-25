@@ -135,7 +135,7 @@ def do_sessions_comm(comm, US=None):
 	elif comm == SESSION_DROP_USER:
 		return _do_sessions_comm(SESSION_DROP_USER_COMM % (US_user(US)), commit=True)
 	else:
-		DP("unknown sessions comm type")
+		DEBUG("unknown sessions comm type")
 		return None	
 
 def ALERT(msg):
@@ -143,7 +143,7 @@ def ALERT(msg):
 	if TXT_ALERT:
 		m = '%s: %s' % (appver(), msg)
 		o = run(['./textme.sh', m], stdout=PIPE, stderr=PIPE)
-		DP(o)
+		DEBUG(o)
 	if LOG_ALERT:
 		t = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S GMT')
 		o ='log %s' % msg
@@ -153,7 +153,7 @@ def ALERT(msg):
 				print(m, file=f)
 		except Exception as e:
 			o += '\n%s' % str(e)
-		DP(o)
+		DEBUG(o)
 
 # Source: https://stackoverflow.com/questions/14107260/set-a-cookie-and-retrieve-it-with-python-and-wsgi
 def set_cookie_header(name, value, days=SESSION_DAYS, minutes=SESSION_MINS):
@@ -176,9 +176,9 @@ def US_expired(US):
 	if US_expiry(US) is None:
 		return None
 	if datetime.datetime.utcnow().timestamp() > US_expiry(US):
-		DP('US expired')
+		DEBUG('US expired')
 	else:
-		DP('US unexpired')
+		DEBUG('US unexpired')
 	return datetime.datetime.utcnow().timestamp() > US_expiry(US)
 
 def mkUS(token=None, user=None, expiry=None):
@@ -189,15 +189,15 @@ def do_sqlite3_comm(db, comm, commit=False, fetch=False):
 	db_con = sqlite3.connect(db)
 	db_cur0 = db_con.cursor()
 	
-	DP("RUN SQL: %s" % comm)
+	DEBUG("RUN SQL: %s" % comm)
 	db_cur1 = db_cur0.execute(comm)
 
 	if fetch:
 		result=db_cur1.fetchone()
-		DP("SQL RES: %s" % str(result))
+		DEBUG("SQL RES: %s" % str(result))
 
 	if commit:
-		DP("RUN SQL: COMMIT;")
+		DEBUG("RUN SQL: COMMIT;")
 		db_cur2 = db_cur1.execute("COMMIT;")
 
 	db_con.close()
@@ -245,7 +245,7 @@ def get_session_by_username(session_username):
 	# purge the old session from the databse and return none 
 	# by re-trying the request
 	if US_expired(US):
-		DP('drop by username %s' % session_username)
+		DEBUG('drop by username %s' % session_username)
 		drop_session_by_username(session_username)
 		return get_session_by_username(session_username)
 
@@ -261,7 +261,7 @@ def get_session_by_token(session_token):
 	# purge the old session from the databse and return none 
 	# by re-trying the request
 	if US_expired(US):
-		DP('drop by token %s' % session_token)
+		DEBUG('drop by token %s' % session_token)
 		drop_session_by_token(session_token)
 		return get_session_by_token(session_token)
 	return US
@@ -327,9 +327,9 @@ def check_credentials(username, password):
 	pwdhash=get_pwdhash_by_user(username)
 	ret = pwdhash is not None and bcrypt.checkpw(bytes8(password), bytes8(pwdhash))
 	if ret:
-		DP(f'[AUTHENTICATED] Correct password for {username}')
+		DEBUG(f'[AUTHENTICATED] Correct password for {username}')
 	else:
-		DP(f'Incorrect password for {username}')
+		DEBUG(f'Incorrect password for {username}')
 
 	return ret
 
@@ -442,14 +442,14 @@ def handle_login(queries, SR, env):
 		username = US_user(US)
 		# check if user requests logout
 		if check_logout(queries):
-			DP('logout initiated for %s' % username)
+			DEBUG('logout initiated for %s' % username)
 			drop_session_by_username(username)
 			# clear local cookie on logout
 			extra_headers.append(set_cookie_header("auth", ""))
 			msg = 'logged out %s successfully' % username
 			US = None
 		elif check_renew(queries):
-			DP('renew initiated for %s' % username)
+			DEBUG('renew initiated for %s' % username)
 			US = renew_session(US)
 			if US is not None:
 				msg = 'renewed session for %s' % username

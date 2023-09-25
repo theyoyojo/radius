@@ -19,7 +19,7 @@ def bytes8(string):
 def str8(string):
 	return str(string, "UTF-8")
 
-def DP(strg):
+def DEBUG(strg):
     print(strg, file=sys.stderr)
 
 def get_token_from_cookie(env):
@@ -38,8 +38,8 @@ def get_authorized_user(server, env):
 
     res = requests.get(uri, verify=False)
 
-    DP('req to uri="%s" returned %s' % (uri, res.status_code))
-    DP('content: %s' % res.text)
+    DEBUG('req to uri="%s" returned %s' % (uri, res.status_code))
+    DEBUG('content: %s' % res.text)
     
     if res.status_code == 200:
         return res.text
