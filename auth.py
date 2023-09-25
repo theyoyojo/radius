@@ -12,6 +12,8 @@ from orbit import appver, messageblock, ROOT, DP, ok_html, \
         notfound_urlencoded, ok_urlencoded, unauth_urlencoded, \
         bytes8, str8
 
+from sql import do_sqlite3_comm
+
 # FYI: US means "user session": it's used whenever
 #	we are dealing with user session info
 
@@ -94,67 +96,6 @@ FORM_LOGOUT_INTERNAL="""
 	</form>
 """
 
-def session_enum():
-	session_enum.cnt += 1
-	return session_enum.cnt
-session_enum.cnt = 0
-
-# data = (token,..)
-SESSION_GET_TOKEN=session_enum()
-SESSION_GET_TOKEN_COMM="SELECT token, user, expiry FROM sessions WHERE token = \"%s\";"
-
-# data = (...,user,...)
-SESSION_GET_USER=session_enum()
-SESSION_GET_USER_COMM="SELECT token, user, expiry FROM sessions WHERE user= \"%s\";"
-
-# data = (token, user, expiry)
-SESSION_NEW=session_enum()
-SESSION_NEW_COMM="INSERT INTO sessions (token, user, expiry) VALUES (\"%s\", \"%s\", \"%s\");"
-
-# data = (token,..)
-SESSION_DROP_TOKEN=session_enum()
-SESSION_DROP_TOKEN_COMM = "DELETE FROM sessions WHERE token = \"%s\";"
-
-# data = (...,user,...)
-SESSION_DROP_USER=session_enum()
-SESSION_DROP_USER_COMM = "DELETE FROM sessions WHERE user = \"%s\";"
-
-def _do_sessions_comm(comm, commit=False, fetch=False):
-	return do_sqlite3_comm(SESSIONS_DB, comm, commit=commit, fetch=fetch)
-
-
-def do_sessions_comm(comm, US=None):
-	if	 comm == SESSION_NEW:
-		return _do_sessions_comm(SESSION_NEW_COMM % US, commit=True)
-	elif comm == SESSION_GET_TOKEN:
-		return _do_sessions_comm(SESSION_GET_TOKEN_COMM % (US_token(US)), fetch=True)
-	elif comm == SESSION_GET_USER:
-		return _do_sessions_comm(SESSION_GET_USER_COMM % (US_user(US)), fetch=True)
-	elif comm == SESSION_DROP_TOKEN:
-		return _do_sessions_comm(SESSION_DROP_TOKEN_COMM % (US_token(US)), commit=True)
-	elif comm == SESSION_DROP_USER:
-		return _do_sessions_comm(SESSION_DROP_USER_COMM % (US_user(US)), commit=True)
-	else:
-		DEBUG("unknown sessions comm type")
-		return None	
-
-def ALERT(msg):
-	# this will be temporarily broken before this part is automated
-	if TXT_ALERT:
-		m = '%s: %s' % (appver(), msg)
-		o = run(['./textme.sh', m], stdout=PIPE, stderr=PIPE)
-		DEBUG(o)
-	if LOG_ALERT:
-		t = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S GMT')
-		o ='log %s' % msg
-		m = '[%s] %s' % (t, msg)
-		try:
-			with open(ALERT_LOGFILE, 'a') as f:
-				print(m, file=f)
-		except Exception as e:
-			o += '\n%s' % str(e)
-		DEBUG(o)
-
 # Source: https://stackoverflow.com/questions/14107260/set-a-cookie-and-retrieve-it-with-python-and-wsgi
 def set_cookie_header(name, value, days=SESSION_DAYS, minutes=SESSION_MINS):
 	dt = datetime.datetime.now() + datetime.timedelta(days=days,minutes=minutes)
@@ -184,26 +125,6 @@ def US_expired(US):
 def mkUS(token=None, user=None, expiry=None):
 	return (token, user, expiry) 
 
-def do_sqlite3_comm(db, comm, commit=False, fetch=False):
-	result=None
-	db_con = sqlite3.connect(db)
-	db_cur0 = db_con.cursor()
-	
-	DEBUG("RUN SQL: %s" % comm)
-	db_cur1 = db_cur0.execute(comm)
-
-	if fetch:
-		result=db_cur1.fetchone()
-		DEBUG("SQL RES: %s" % str(result))
-
-	if commit:
-		DEBUG("RUN SQL: COMMIT;")
-		db_cur2 = db_cur1.execute("COMMIT;")
-
-	db_con.close()
-
-	return result
-
 def new_session_by_username(session_username):
 	
 	ALERT('start session for user %s ' % session_username)
@@ -223,21 +144,21 @@ def new_session_by_username(session_username):
 	# sessions expire in SESSION_DAYS * 24 * 60 + SESSION_MINS minutes for now
 	session_expiry = (datetime.datetime.utcnow() + datetime.timedelta(minutes=SESSION_MINS, days=SESSION_DAYS)).timestamp()
 
-	do_sessions_comm(SESSION_NEW, mkUS(token=session_token, \
+	sql.do_sessions_comm(sql.SESSION_NEW, mkUS(token=session_token, \
 		user=session_username, expiry=session_expiry))
 
 	return get_session_by_username(session_username)
 
 def drop_session_by_username(session_username):
-	do_sessions_comm(SESSION_DROP_USER, mkUS(user=session_username))
+	sql.do_sessions_comm(sql.SESSION_DROP_USER, mkUS(user=session_username))
 	return
 
 def drop_session_by_token(session_token):
-	do_sessions_comm(SESSION_DROP_TOKEN, mkUS(token=session_token))
-	return
+	sql.do_sessions_comm(sql.SESSION_DROP_TOKEN, mkUS(token=session_token))
+	return # FIXME should these return None?
 
 def get_session_by_username(session_username):
-	US = do_sessions_comm(SESSION_GET_USER, mkUS(user=session_username))
+	US = do_sessions_comm(sql.SESSION_GET_USER, mkUS(user=session_username))
 	if US is None:
 		return None	
 
@@ -253,7 +174,7 @@ def get_session_by_username(session_username):
 
 # return none if token is expired and also purge old entry
 def get_session_by_token(session_token):
-	US = do_sessions_comm(SESSION_GET_TOKEN, mkUS(token=session_token))
+	US = sql.do_sessions_comm(sql.SESSION_GET_TOKEN, mkUS(token=session_token))
 	if US is None:
 		return None	
 
@@ -282,7 +203,7 @@ def handle_check(queries, SR):
 	if len(token) > 0:
 		return _handle_check(token, SR)
 	else:
-		return unauth_urlencoded('error="No token= supplied in URL. Nothing done."', SR)
+		return unauth_urlencoded('null', SR)
 
 def _handle_logout(username, SR):
 	US = get_session_by_username(username)
@@ -299,19 +220,7 @@ def handle_logout(queries, SR):
 	if len(username) > 0:
 		return _handle_logout(username, SR)
 	else:
-		return ok_urlencoded('error="No username= suplied in URL. Nothing done."', SR)
-
-def get_req_body_size(env):
-	try:
-		req_body_size = int(env.get('CONTENT_LENGTH', 0))
-	except ValueError:
-		req_body_size = 0
-	
-	return req_body_size
-
-def is_post_req(env):
-	return get_req_body_size(env) > 0
-
+		return ok_urlencoded('null', SR)
 
 def get_pwdhash_by_user(username):
 	comm="select pwdhash from users where username = \"%s\";" % username

@@ -3,7 +3,7 @@
 import markdown as markdown
 import os, sys
 
-from orbit import appver, messageblock, ROOT
+import orbit
 import auth
 
 HTML_404 = '<h1> 404: PAGE NOT FOUND </h1>'
@@ -16,17 +16,8 @@ def read_file(filename, mode='r'):
 		output += f.read()
 	return output
 
-def handle_md(env, SR):
+def handle_md(path, SR):
 	output=''
-	try:
-            with open(ROOT + '/data/header', 'r') as f:
-                    output += f.read()
-	except Exception as e:
-		SR(_500, [('Content-Type', 'text/plain')])
-		return _500_MSG
-
-	path_info = env.get('PATH_INFO', '/index.md')
-
 	# response to request for directory
 	# with index.md page within, it exists
 	fname = '%s%s' % (ROOT + '/md', path_info)
@@ -42,12 +33,19 @@ def handle_md(env, SR):
 		output += HTML_404
 		status = '404 Not Found'
 
-	output += messageblock([('appver', appver())])
+	output += orbit.footer()
 
 	SR(status, [('Content-Type', 'text/html')])
 	return [bytes(output, "UTF-8")]
 
 def application(env, SR):
+    output += orbit.header()
+	try:
+            with open(ROOT + '/data/header', 'r') as f:
+                    output += f.read()
+	except Exception as e:
+		SR(_500, [('Content-Type', 'text/plain')])
+		return _500_MSG
 
 	path_info = env.get("PATH_INFO", "")
 	query_string = env.get("QUERY_STRING", "")
@@ -57,12 +55,13 @@ def application(env, SR):
             USERS_DB = 'users.test.db'
             SESSIONS_DB = 'sessions.test.db'
 
-	DEBUG("New request: path_info=\"%s\", queries=\"%s\"" \
+	DEBUG("HTTP  path_info=\"%s\", queries=\"%s\"" \
 		% (str(path_info), str(queries)))
     
     # cgit exception should be handled by nginx
     if len(path_info) >= 3 and path_info[len(path_info)-3:] == ".md":
-        return handle_md
+        if os.path.isfile(ROOT + '/md' + path_info):
+            return handle_md(path)
 
 	if path_info == "/login":
 		return auth.handle_login(queries, SR, env)
@@ -73,4 +72,4 @@ def application(env, SR):
 	elif path_info == "/mail_auth":
 		return auth.handle_mail_auth(SR, env)
 	else:
-		return 
+		return orbit. 

@@ -19,8 +19,27 @@ def bytes8(string):
 def str8(string):
 	return str(string, "UTF-8")
 
+# these
 def DEBUG(strg):
     print(strg, file=sys.stderr)
+
+def ALERT(msg):
+	# this will be temporarily broken before this part is automated
+    # FIXME
+	if TXT_ALERT:
+		m = '%s: %s' % (appver(), msg)
+		o = run(['./textme.sh', m], stdout=PIPE, stderr=PIPE)
+		DEBUG(o)
+	if LOG_ALERT:
+		t = datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S GMT')
+		o ='log %s' % msg
+		m = '[%s] %s' % (t, msg)
+		try:
+			with open(ALERT_LOGFILE, 'a') as f:
+				print(m, file=f)
+		except Exception as e:
+			o += '\n%s' % str(e)
+		DEBUG(o)
 
 def get_token_from_cookie(env):
     # get auth=$TOKEN from user cookie
@@ -45,6 +64,17 @@ def get_authorized_user(server, env):
         return res.text
 
     return None
+
+def get_req_body_size(env):
+	try:
+		req_body_size = int(env.get('CONTENT_LENGTH', 0))
+	except ValueError:
+		req_body_size = 0
+	
+	return req_body_size
+
+def is_post_req(env):
+	return get_req_body_size(env) > 0
 
 def appver():
     return "%s %s %s" % (APPLICATION, VERSION, SOURCE)
@@ -130,3 +160,14 @@ def notfound_urlencoded(content, SR):
 	SR('404 Not Found', [('Content-Type', \
 		'application/x-www-form-urlencoded')])
 	return [bytes8(content)]
+
+BACKUP_HEADER="<style>body { margin 0 auto; } </style><h1>ORBIT HEADER NOT FOUND</h1>"
+def header():
+    try:
+        with open(ROOT + '/data/header', 'r') as f:
+                return f.read()
+	except Exception as e:
+        return BACKUP_HEADER
+
+def footer():
+    return messageblock([('appver', appver())])
