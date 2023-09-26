@@ -1,25 +1,21 @@
 #!/bin/env python3
 
 import requests, os, sys, http, urllib
-
+from config import CONFIG_SESSION_MINS, CONFIG_SESSION_DAYS
 
 APPLICATION = 'radius'
 VERSION = '0.1'
 SOURCE = 'https://github.com/underground-software/radius'
-ROOT = os.environ.get('ORBIT_PREFIX')
+ORBIT_PREFIX= os.environ.get('ORBIT_PREFIX')
 HOSTNAME = os.environ.get('SRVNAME')
+DATA_ROOT = f'{ORBIT_PREFIX}{HOSTNAME}'
 
-AUTH_SERVER = 'http://127.0.0.1:9092'
-
-# shortand for bytes(string, "UTF-8")
 def bytes8(string):
 	return bytes(string, "UTF-8")
 
-# shortand for str(string, "UTF-8")
 def str8(string):
 	return str(string, "UTF-8")
 
-# these
 def DEBUG(strg):
     print(strg, file=sys.stderr)
 
@@ -27,91 +23,20 @@ def appver():
     return f'{APPLICATION} {VERSION} {SOURCE}'
 
 def messageblock(lst):
-    res=''
     sep = '<br /><hr /><br />'
-
-    res += sep
+    res = sep
     for item in lst:
         res += f'<code>{item[0]} = {item[1]}</code><br />'
     res += sep
 
     return res
 
-def h(v, c):
-    return f'<h{v}>{c}</h{v}'
-
-def h1(c):
-    return h(1, c)
-
-def h2(c):
-    return h(2, c)
-
-def h3(c):
-    return h(3, c)
-
-def h4(c):
-    return h(4, c)
-
-def h5(c):
-    return h(5, c)
-
-def t_i(i):
-    return ''.join(['\t' for x in range(i)])
-
-def o(i, c):
-    return f'{t_i(i)}{c)}\n'
-
-def ooo(i, c, d, e, j=0):
-    return f'{(o(i, c)}{o(i+j, d)}{o(i, e)}'
-
-def oOo(i, c, d, e):
-    return ooo(i, c, d, e, j=1)
-
-def oxo(i, c, d, e):
-    return f'{o(i, c)}{d}{o(i, e)}'
-
-def table_data(c, h=False, i=0):
-    d = 'd'
-    if h:
-        d = 'h'
-    a, b = f'<t{d}>', f'</t{d}'
-    return oOo(i, a, c, b)
-
-def table_row(c, h=False, i=0):
-    d = ''.join([table_data(d, h=h, i=i+1) for d in c])
-    return oxo(i, '<tr>', d, '</tr>')
-
-def table(c, i=0):
-    t=''
-    h=True
-    for r in c:
-        t += table_row(r, h, i=i+1)
-        h=False
-    return oxo(i, '<table>', t, '</table>')
-
-def div(c, attr="", i=0):
-    return oxo(i, f'<div{attr}>', c, '</div>')
-
-def li(c):
-    return o(c)
-
-def ul(c, i=0):
-    return oxo(i, f'<ul>', '\n'.join([li(_li) for _li in c]), '</ul>')
-
-def a(text, href):
-    return f'<a href="{href}">{text}</a>'
-
-def button(c, i=0, a=''):
-    return oOo(i, f'<button {a}>', c, '</button>')
-
-def input_(attr=''):
-    return f'<input {attr} >'
-
-def label(attr='', c):
-    return f'<label {attr} >{c}</label>'
-
-def form(attr, c):
-    return f'<form {attr} >{c} </form>'
+# Source: https://stackoverflow.com/questions/14107260/set-a-cookie-and-retrieve-it-with-python-and-wsgi
+def set_cookie_header(name, value, days=CONFIG_SESSION_DAYS, minutes=CONFIG_SESSION_MINS):
+	dt = datetime.datetime.now() + datetime.timedelta(days=days,minutes=minutes)
+	fdt = dt.strftime('%a, %d %b %Y %H:%M:%S GMT')
+	secs = 60 * minutes + 86400 * days
+	return ('Set-Cookie', '{}={}; Expires={}; Max-Age={}; Path=/'.format(name, value, fdt, secs))
 
 BACKUP_HEADER="<style>body { margin 0 auto; } </style><h1>ORBIT HEADER NOT FOUND</h1>"
 class Rocket:
@@ -119,9 +44,9 @@ class Rocket:
         self.environment = environment
         self.start_response = start_response
 
-        self.path_info = self.envget("PATH_INFO"))
+        self.path_info = self.envget("PATH_INFO")
         self.query_string = self.envget("QUERY_STRING")
-        self.queries = urllib.parse.parse_qs(query_string)
+        self.queries = urllib.parse.parse_qs(self.query_string)
 
         self.cookie_user_raw = None
         self.user_auth_token = None
@@ -130,12 +55,14 @@ class Rocket:
         self.captains_log = None
         self.extra_headers = []
 
-        DEBUG(f'ROCKET HTTP {self.method_str()} {self.path_info}{self.query_string}')
-
     def __str__(self):
-        return f'Rocket {\n\tMETHOD:\t{self.method_str()}\n\tPATH:\t{self.path_info}\n\t' + \
-                f'QUERY:\t{self.query_sring}\n\tAUTH:\t{self.user_auth_token}\n\t' + \
-                f'SESH: {str(self._session)}\n}\n'
+        return ( f'Rocket (\n\t'
+                 f'METHOD:\t{self.method_str()}\n\t'
+                 f'PATH:\t{self.path_info}\n\t'
+                 f'QUERY:\t{self.query_sring}\n\t'
+                 f'AUTH:\t{self.user_auth_token}\n\t'
+                 f'SESH:\T{str(self._session)}\n'
+                 f')\n' )
 
     def alert(self, msg):
         alerts += [f'<hr /><i>{msg}</i><hr />']
@@ -143,26 +70,13 @@ class Rocket:
     def caplog(self, msg):
         self.captains_log = msg
 
-    def header(self):
-        try:
-            with open(f'{ROOT}/{SRVNAME}/data/header', 'r') as f:
-                    return f.read() = "".join(self.alerts)
-        except Exception as e:
-            return BACKUP_HEADER
-
-    def footer(self):
-        msglist = [('appver', appver())]
-        if self.captains_log is not None:
-            msglist += [('msg', str(self.captains_log))]
-        return messageblock(msglist)
-
-    def urldecode_from_body(self, key)
+    def urldecode_from_body(self, key):
         return html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
     
-    def seeks(self, key);
+    def seeks(self, key):
         return queries.get(key, [''])[0]
 
-    def seeks_to_find(self, key, val);
+    def seeks_to_find(self, key, val):
         return self.seeks(key) == val
 
     @property
@@ -177,12 +91,40 @@ class Rocket:
         if self.session is not None:
             return self._session.user
 
+    
+    def load_user_auth_cookie(self):
+        # get auth=$TOKEN from user cookie
+        self.cookie_user_raw = self.environment.get('HTTP_COOKIE', '')
+        cookie_user = http.cookies.BaseCookie('')
+        cookie_user.load(self.cookie_user_raw)
+
+        auth = cookie_user.get('auth', http.cookies.Morsel())
+        if auth.value is not None:
+            self.user_auth_token = auth.value
+            return self.user_auth_token
+
+    # Attempt login using urelencoded credentials from request boy
+    def launch(self):
+        if self.is_post_req():
+            data = parse_qs(self.envget['wsgi.input'].read())
+
+            # get actual urlencoded body content
+            username = self.urldecode_from_body('username')
+            password = self.urldecode_from_body('password')
+
+            self._session = auth.login(username, password)
+            if self.session:
+                self.extra_headers += set_cookie_header("auth", session.token)
+
+    # Renew current sesssion and set user auth cookie accordingly
     def refuel(self):
         auth.drop_session_by_username(self.username)
         self._session = auth.new_sesion_by_username(self.username)
-        self.extra_headers += set_cookie_header('auth', session.token)
+        if self.session:
+            self.extra_headers += set_cookie_header('auth', session.token)
         return self.session
 
+    # Logout of current session and clear user auth cookie
     def retire(self):
         self.extra_headers += set_cookie_header('auth', '')
         return auth.drop_session_by_username(self.username)
@@ -190,14 +132,34 @@ class Rocket:
     def envget(self, key):
         return self.environment.get(key, '')
 
-    def __do_http_response(self, content, content_type, headers=[], return_code)
+    # Load header from data root
+    # This generally includes the stylesheet, logo, title, and navigation
+    # Append any alerts right below this header
+    def header(self):
+        try:
+            with open(f'{ROOT}/{SRVNAME}/data/header', 'r') as f:
+                    return f.read() + "".join(self.alerts)
+        except Exception as e:
+            return BACKUP_HEADER
+
+    # Generate the page footer using our messageblock helper
+    # Set the value of message to the string of whatever is in the captains log
+    def footer(self):
+        msglist = [('appver', appver())]
+        if self.captains_log is not None:
+            msglist += [('msg', str(self.captains_log))]
+        return messageblock(msglist)
+
+    # This is the __only__ call site of start_respoinse in in this application
+    # All user requests eventually end up here 
+    def __do_response_http(self, content, content_type, headers=[], return_code='200 OK'):
         self.start_response(return_code,  headers)
-        return [bytes8(orbit.header() + doc + orbit.footer())]
+        return [bytes8(content))]
 
-    def _do_http_response(self, content, content_type, headers=[], return_code)
-        return __do_http_response(self, content, [('Content-Type', content_type)] + headers, return_code):
+    def _do_response_http(self, content, content_type, headers=[], return_code='200 OK'):
+        return self.__do_http_response(self, content, [('Content-Type', content_type)] + headers, return_code)
 
-    def _do_ok_response(self, content, extra_content, content_type, headers)
+    def _do_ok_response(self, content, extra_content, content_type, headers=[]):
         return self._do_http_response(content + ''.join(extra_content), content_type, headers, '200 OK')
 
     def _do_unauth_response(self, content, content_type, headers=[]):
@@ -209,17 +171,20 @@ class Rocket:
     def _do_illegal_response(self, content, content_type, headers=[]):
         return self._do_http_response(content, content_type, headers, '451 Unavailable For Legal Reasons')
 
-    def ok_html(self, content, extra_docs=[]):
-        return self._do_ok_response(content, extra_content=extra_docs, 'text/html', self.extra_headers)
+    def response_html(self, content, extra_headers=[], extra_docs=[])
+        return self._do_response_http(self.header() +  content + self.footer(),
+            extra_content=extra_docs, content_type='text/html', headers=self.extra_headers)
 
-    def ok_text(self, content, extra_text=[])
-        return self._do_ok_response(content, extra_content=extra_text, 'text/plain', self.extra_headers)
+    def ok_html(self, content, extra_docs=[]):
+
+    def ok_text(self, content, extra_text=[]):
+        return self._do_ok_response(content, extra_content=extra_text, content_type='text/plain', headers=self.extra_headers)
 
     def ok_urlencoded(self, content, extra_content=[], extra_headers=[]):
         return self._do_ok_response(content, extra_content=extra_content, \
-                'application/x-www-form-urlencoded', extra_headers)
+                content_type='application/x-www-form-urlencoded', extra_headers=extra_headers)
 
-    def unauth_text(self, content)
+    def unauth_text(self, content):
         return self._do_unauth_response(content, 'text/html')
 
     def unauth_text(self, content):
@@ -259,31 +224,8 @@ class Rocket:
 
         return self.__do_http_response('',self.extra_headers, '200 OK')
 
-    def load_user_auth_cookie(self):
-        # get auth=$TOKEN from user cookie
-        self.cookie_user_raw = self.environment.get('HTTP_COOKIE', '')
-        cookie_user = http.cookies.BaseCookie('')
-        cookie_user.load(self.cookie_user_raw)
-
-        auth = cookie_user.get('auth', http.cookies.Morsel())
-        if auth.value is not None:
-            self.user_auth_token = auth.value
-            return self.user_auth_token
-
-    def launch(self):
-        if self.is_post_req()
-            data = parse_qs(self.envget['wsgi.input'].read())
-
-            # get actual urlencoded body content
-            username = self.urldecode_from_body('username')
-            password = self.urldecode_from_body('password')
-
-            self._session = auth.login(username, password)
-            if self.session:
-                self.extra_headers += set_cookie_header("auth", session.token)
-
     def get_lfx_status(self):
-        return sql.users_get_lfx_by_username(username) is not None]
+        return sql.users_get_lfx_by_username(username) is not None
 
     def get_req_body_size(self):
         try:
@@ -296,7 +238,7 @@ class Rocket:
     def is_post_req(self):
         return self.get_req_body_size() > 0
 
-    def method_str(self)
+    def method_str(self):
         if self.is_post_req():
             return "POST"
         else:

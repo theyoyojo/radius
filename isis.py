@@ -4,9 +4,9 @@
 
 from datetime import datetime
 import random
-from common import get_sub_by_user, get_ass
+from sql import submissions_get_by_username, assignments_get_all
 
-from orbit import table
+from orbgen import table
 
 def isis_table(ass_pair, subd):
     fmt = [('Submission IDs', 'Time Recieved', 'Summary',  'Email IDs', 'Grade')]
@@ -27,7 +27,7 @@ def isis_table(ass_pair, subd):
 
 # REVISION INDEX | DATETIME RECV | COMMENTS | GRADE
 def isis(user):
-    subs = get_sub_by_user(user)
+    subs = submissions_get_by_username(user)
     print('GET SUBS', subs)
     subd = {}
 
@@ -44,7 +44,7 @@ def isis(user):
 
     print('SUBD:', subd)
 
-    for ass_pair in get_ass():
+    for ass_pair in assiginments_get_all():
         output += f'<h3>{ass_pair[0]}: {ass_pair[1]}</h3>\n'
         output += isis_table(ass_pair, subd)
 
