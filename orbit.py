@@ -7,6 +7,8 @@ APPLICATION = 'radius'
 VERSION = '0.1'
 SOURCE = 'https://github.com/underground-software/radius'
 ROOT = os.environ.get('ORBIT_PREFIX')
+HOSTNAME = os.environ.get('SRVNAME')
+
 AUTH_SERVER = 'http://127.0.0.1:9092'
 
 # shortand for bytes(string, "UTF-8")
@@ -34,17 +36,6 @@ def messageblock(lst):
     res += sep
 
     return res
-
-BACKUP_HEADER="<style>body { margin 0 auto; } </style><h1>ORBIT HEADER NOT FOUND</h1>"
-def header():
-    try:
-        with open(ROOT + '/data/header', 'r') as f:
-                return f.read()
-	except Exception as e:
-        return BACKUP_HEADER
-
-def footer():
-    return messageblock([('appver', appver())]
 
 def h(v, c):
     return f'<h{v}>{c}</h{v}'
@@ -122,6 +113,7 @@ def label(attr='', c):
 def form(attr, c):
     return f'<form {attr} >{c} </form>'
 
+BACKUP_HEADER="<style>body { margin 0 auto; } </style><h1>ORBIT HEADER NOT FOUND</h1>"
 class Rocket:
     def __init__(self, environment, start_response):
         self.environment = environment
@@ -134,6 +126,9 @@ class Rocket:
         self.cookie_user_raw = None
         self.user_auth_token = None
         self._session = None
+        self.alerts = None
+        self.captains_log = None
+        self.extra_headers = []
 
         DEBUG(f'ROCKET HTTP {self.method_str()} {self.path_info}{self.query_string}')
 
@@ -142,14 +137,33 @@ class Rocket:
                 f'QUERY:\t{self.query_sring}\n\tAUTH:\t{self.user_auth_token}\n\t' + \
                 f'SESH: {str(self._session)}\n}\n'
 
+    def alert(self, msg):
+        alerts += [f'<hr /><i>{msg}</i><hr />']
+
+    def caplog(self, msg):
+        self.captains_log = msg
+
+    def header(self):
+        try:
+            with open(f'{ROOT}/{SRVNAME}/data/header', 'r') as f:
+                    return f.read() = "".join(self.alerts)
+        except Exception as e:
+            return BACKUP_HEADER
+
+    def footer(self):
+        msglist = [('appver', appver())]
+        if self.captains_log is not None:
+            msglist += [('msg', str(self.captains_log))]
+        return messageblock(msglist)
+
     def urldecode_from_body(self, key)
         return html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
     
     def seeks(self, key);
         return queries.get(key, [''])[0]
 
-    def seeks_to_be(self, key, val);
-        return queries.get(key, [''])[0] == val
+    def seeks_to_find(self, key, val);
+        return self.seeks(key) == val
 
     @property
     def session(self):
@@ -159,13 +173,22 @@ class Rocket:
         return self._session
 
     @property
-    def user(self):
+    def username(self):
         if self.session is not None:
             return self._session.user
 
-    def envget(self, key):
-        return self.environment.get(key, "")
+    def refuel(self):
+        auth.drop_session_by_username(self.username)
+        self._session = auth.new_sesion_by_username(self.username)
+        self.extra_headers += set_cookie_header('auth', session.token)
+        return self.session
 
+    def retire(self):
+        self.extra_headers += set_cookie_header('auth', '')
+        return auth.drop_session_by_username(self.username)
+
+    def envget(self, key):
+        return self.environment.get(key, '')
 
     def __do_http_response(self, content, content_type, headers=[], return_code)
         self.start_response(return_code,  headers)
@@ -175,7 +198,7 @@ class Rocket:
         return __do_http_response(self, content, [('Content-Type', content_type)] + headers, return_code):
 
     def _do_ok_response(self, content, extra_content, content_type, headers)
-        return self._do_http_response(content + "".join(extra_content), content_type, headers, '200 OK')
+        return self._do_http_response(content + ''.join(extra_content), content_type, headers, '200 OK')
 
     def _do_unauth_response(self, content, content_type, headers=[]):
         return self._do_http_response(content, content_type, headers, '401 Unauthorized')
@@ -186,45 +209,55 @@ class Rocket:
     def _do_illegal_response(self, content, content_type, headers=[]):
         return self._do_http_response(content, content_type, headers, '451 Unavailable For Legal Reasons')
 
-    def ok_html(doc, SR, extra_docs=[], extra_headers=[]):
-        return self._do_ok_response(doc, extra_content=extra_docs, 'text/html', extra_headers)
+    def ok_html(self, content, extra_docs=[]):
+        return self._do_ok_response(content, extra_content=extra_docs, 'text/html', self.extra_headers)
 
-    def ok_text(text, SR, extra_text=[], extra_headers=[]):
-        return self._do_ok_response(doc, extra_content=extra_text, 'text/plain', extra_headers)
+    def ok_text(self, content, extra_text=[])
+        return self._do_ok_response(content, extra_content=extra_text, 'text/plain', self.extra_headers)
 
-    def ok_urlencoded(content, SR, extra_content=[], extra_headers=[]):
-        return self._do_ok_response(doc, extra_content=extra_content, \
+    def ok_urlencoded(self, content, extra_content=[], extra_headers=[]):
+        return self._do_ok_response(content, extra_content=extra_content, \
                 'application/x-www-form-urlencoded', extra_headers)
 
-    def unauth_text(content, SR):
-        return self._do_unauth_response(doc, 'text/html')
+    def unauth_text(self, content)
+        return self._do_unauth_response(content, 'text/html')
 
-    def unauth_text(content, SR):
-        return self._do_unauth_response(doc, 'text/plain')
+    def unauth_text(self, content):
+        return self._do_unauth_response(content, 'text/plain')
 
     def unauth_urlencoded(self, content):
-        return self._do_unauth_response(doc, 'application/x-www-form-urlencoded')
+        return self._do_unauth_response(content, 'application/x-www-form-urlencoded')
 
     def notfound_html(self, content):
-        return self._do_notfound_response(doc, 'text/html')
+        return self._do_notfound_response(content, 'text/html')
 
     def notfound_text(self, content):
-        return self._do_notfound_response(doc, 'text/plain')
+        return self._do_notfound_response(content, 'text/plain')
 
     def notfound_urlencoded(self, content):
-        return self._do_notfound_response(doc, 'application/x-www-form-urlencoded')
+        return self._do_notfound_response(content, 'application/x-www-form-urlencoded')
 
     def illegal_html(self, content):
-        return self._do_illegal_response(doc, 'text/html')
+        return self._do_illegal_response(content, 'text/html')
 
     def illegal_text(self, content):
-        return self._do_illegal_response(doc, 'text/plain')
+        return self._do_illegal_response(content, 'text/plain')
 
     def illegal_urlencoded(self, content):
-        return self._do_illegal_response(doc, 'application/x-www-form-urlencoded')
+        return self._do_illegal_response(content, 'application/x-www-form-urlencoded')
 
     def mail_auth_badreq(self):
         return self.__do_http_response('', [('Auth-Status', 'Invalid Request')], '400 Bad Request')
+
+    def mail_auth_ok_invalid(self):
+        return self.__do_http_response('', [('Auth-Status', 'Invalid Credentials')], '200 ')
+
+    def mail_auth_ok(self, auth_port):
+        self.extra_headers += [('Auth-Status',    'OK')]
+        self.extra_headers += [('Auth-Port',      auth_port)]
+        self.extra_headers += [('Auth-server',    '127.0.0.1')]
+
+        return self.__do_http_response('',self.extra_headers, '200 OK')
 
     def load_user_auth_cookie(self):
         # get auth=$TOKEN from user cookie
@@ -237,14 +270,20 @@ class Rocket:
             self.user_auth_token = auth.value
             return self.user_auth_token
 
-    def load_login_creds_from_body(self):
+    def launch(self):
         if self.is_post_req()
             data = parse_qs(self.envget['wsgi.input'].read())
 
             # get actual urlencoded body content
             username = self.urldecode_from_body('username')
             password = self.urldecode_from_body('password')
-            return auth.login(username, password)
+
+            self._session = auth.login(username, password)
+            if self.session:
+                self.extra_headers += set_cookie_header("auth", session.token)
+
+    def get_lfx_status(self):
+        return sql.users_get_lfx_by_username(username) is not None]
 
     def get_req_body_size(self):
         try:

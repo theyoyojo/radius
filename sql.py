@@ -107,3 +107,12 @@ VALUES ("{}", "{}", "{}", "{}");"
 
 def users_new(u, p, l=False, i=0)
     return do_sqlite3_comm(USERS_GET_PWDHASH_COMM.format(u, p, l, i), commit=True)
+
+USERS_GET_LFX_BY_USERNAME="""
+SELECT lfx
+FROM users
+WHERE username = "{}";
+""".strip()
+
+def users_get_lfx_by_username(u):
+    return do_sqlite3_comm(USERS_GET_LFX_BY_USERNAME.format(u), fetch=True)
