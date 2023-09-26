@@ -2,10 +2,11 @@
 
 import datetime
 
-import sql
 
 from orbit import ROOT, messageblock, appver, \
     get_authorized_user, AUTH_SERVER, table, DP, bytes8
+
+import sql
 
 from isis import isis
 
@@ -51,9 +52,6 @@ def old_build_page(sid):
 
     return page
 
-def autorefresh_text(interval):
-    return bytes(f'<meta http-equiv="refresh" content="{interval}">', "UTF-8")
-
 REFRESH_INTERVAL=2
 def build_page(user, sid, path):
     return isis(user)
@@ -63,8 +61,6 @@ def get_id_by_user(user):
     return 45
 
 def gather_id(env):
-    path = env.get('PATH_INFO', '/dashboard')
-    DEBUG(f'path: {path}')
 
     user = get_authorized_user(AUTH_SERVER, env)
     if user is None:
@@ -78,17 +74,3 @@ def gather_id(env):
     DEBUG(f'found student id: {sid}')
 
     return (user, sid, path)
-
-def dashboard(env, SR):
-    (user, sid, path) = gather_id(env)
-    page = ""
-
-    with open(ROOT + '/data/header') as header:
-        page += header.read();
-
-    page += build_page(user, sid, path)
-    page += messageblock([('appver', appver())])
-
-    SR('200 OK', [('Content-Type', 'text/html')])
-
-    return bytes8(page)

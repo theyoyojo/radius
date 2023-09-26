@@ -1,19 +1,19 @@
 PRAGMA foreign_keys=OFF;
 BEGIN TRANSACTION;
 CREATE TABLE users (
-id integer primary key,
-username string UNIQUE NOT NULL,
-pwdhash string NOT NULL,
-lfx boolean NOT NULL
+	id integer primary key,
+	username string UNIQUE NOT NULL,
+	pwdhash string NOT NULL,
+	lfx boolean NOT NULL
+	student_id integer,
 );
 CREATE TABLE sessions (
         token string PRIMARY KEY,
-        user string UNIQUE NOT NULL,
+        username string UNIQUE NOT NULL,
         expiry string NOT NULL);
-COMMIT;
 CREATE TABLE submissions (
 	sub_id string PRIMARY KEY,
-	user string NOT NULL,
+	username string NOT NULL,
 	time string NOT NULL,
 	_to string NOT NULL,
 	_from string NOT NULL,

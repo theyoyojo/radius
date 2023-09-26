@@ -1,276 +1,146 @@
-from urllib.parse import parse_qs
-from html import escape
-from http import cookies
-import sys, datetime, bcrypt, sqlite3, hashlib, random
-from subprocess import run, PIPE
+import sys, datetime, bcrypt, sqlite3, hashlib, random, html, urllib
 
-from config import SESSIONS_DB, USERS_DB,\
-	TXT_ALERT, LOG_ALERT, ALERT_LOGFILE,\
-	SESSION_DAYS, SESSION_MINS, NEW_SESSION_BUMPS_OLD
+from config import SESSIONS_DAYS, SESSIONS_MINS
 
-from orbit import appver, messageblock, ROOT, DP, ok_html, \
-        notfound_urlencoded, ok_urlencoded, unauth_urlencoded, \
-        bytes8, str8
+from orbit import DEBUG, bytes8, str8
+import orbit as orb
+import sql
 
-from sql import do_sqlite3_comm
+def gen_form_login():
+    return orb.form(' id="login" method="post" action="/login" ',
+        orb.label(' for="username" ', 'Username: <br />') + \
+        orb.input_(' name="username" type="text" id="username" ') + \
+        '<br />' + \
+        orb.label(' for="username" ', 'Username: <br />') + \
+        orb.input_(' name="password" type="password" id="password" ')
+        '<br />' + \
+       orb. button('Submit', 0, ' type="submit" '))
 
-# FYI: US means "user session": it's used whenever
-#	we are dealing with user session info
 
-FORM_LOGIN="""
-	<form id="login" method="post" action="/login">
-		<label for="username">Username:<br /></label>
-		<input name="username" type="text" id="username" />
-	<br />
-		<label for="password">Password:<br /></label>
-		<input name="password" type="password" id="password" />
-	<br />
-		<button type="submit">Submit</button>
-	</form>
-"""
+def gen_cookie_info_table(session):
+    return orb.table([
+        ('Cookie Key', 'Value'),
+        ('Token', session.token),
+        ('User', session.username),
+        ('Expiry', session.expiry_fmt),
+        ('Remaining Validity', session.remaining_validity)])
 
-FORM_LOGOUT="""
-	<div class="logout_info">
-	<div class="logout_left">
-	<table>
-	<tr>
-		<th>Cookie Key</th>
-		<th>Value</th>
-	</tr>
-	<tr>
-		
-		<td>Token</td>
-		<td>%(token)s</td>
-	</tr>
-	<tr>
-		
-		<td>Username</td>
-		<td>%(username)s</td>
-	</tr>
-	<tr>
-		
-		<td>Expiry</td>
-		<td>%(expiry)s</td>
-	</tr>
-	<tr>
-		
-		<td>Remaining</td>
-		<td>%(remaining)s</td>
-	</tr>
-	</table>
-	</div>
+def gen_logout_buttons():
+    return form(' id="logout" method="get" action="/login" ', \
+        orb.input_(' type="hidden" name="logout" value="true" ') + \
+        orb.button('Logout', 0, ' type="submit" class="logout" ')) + \
+        orb.form(' id="rewnew" method="get" action="/login" ',
+        orb.input_(' id="renew" method="get" action="/" ') + \
+        orb.button('Renew', 0, ' type="submit" class="renew" '))
 
-	<div class="logout_right">
-
-	<div class="logout_right_inner">
-
-	<h5> Welcome! </h5>
-	<ul>
-	<li>
-	<a href="/dashoard">Dashboard</a>
-	</li>
-	</ul>
-	</div>
-	</div>
-	</div>
-
-	<div class="logout_buttons">
-	%(logout_button)s
-	</div>
-"""	
-
-FORM_LOGOUT_EXTERNAL="""
-	<form id="logout" method="post" action="/login/logout.md">
-		<button type="submit">Logout</button>
-	</form>
-"""
-
-FORM_LOGOUT_INTERNAL="""
-	<form id="logout" method="get" action="/login">
-		<input type="hidden" name="logout" value="true">
-		<button type="submit" class="logout">Logout</button>
-	</form>
-	<form id="renew" method="get" action="/login">
-		<input type="hidden" name="renew" value="true">
-		<button type="submit" class="renew">Renew</button>
-	</form>
-"""
+def gen_form_logout(session):
+    return orb.div(orb.div(gen_cookie_info_table(session), ' class="logout_left" ') + \
+        orb.div(orb.h5("Welcome!") + orb.ul([orb.a('Dashboard', '/dashboard')]) + \
+        orb.div(gen_logout_buttons() ,' class="logout_buttons" '), ' class="logout_info" ')
 
 # Source: https://stackoverflow.com/questions/14107260/set-a-cookie-and-retrieve-it-with-python-and-wsgi
-def set_cookie_header(name, value, days=SESSION_DAYS, minutes=SESSION_MINS):
+def set_cookie_header(name, value, days=SESSIONS_DAYS, minutes=SESSIONS_MINS):
 	dt = datetime.datetime.now() + datetime.timedelta(days=days,minutes=minutes)
 	fdt = dt.strftime('%a, %d %b %Y %H:%M:%S GMT')
 	secs = 60 * minutes + 86400 * days
 	return ('Set-Cookie', '{}={}; Expires={}; Max-Age={}; Path=/'.format(name, value, fdt, secs))
 
-# US (user session data) structure (token, user, expiry)
-def US_token(US):
-	return US[0]
+class Session:
+    def __init__(self, token=None, username=None, expiry=None):
+        self.token = token
+        self.username = username
+        self._expiry = None
+        if expiry is not None:
+            self._expiry = datetime.datetime.fromtimestamp(expiry)
 
-def US_user(US):
-	return US[1]
+    def expired(self):
+          if expiry := self.expiry is None or datetime.datetime.utcnow().timestamp() > expiry:
+            drop_session_by_token(self.token)
+            return True
+        else:
+            return False
 
-def US_expiry(US):
-	return US[2]
+    def expiry_fmt(self):
+        return self._expiry.strftime('%a, %d %b %Y %H:%M:%S GMT')
 
-def US_expired(US):
-	if US_expiry(US) is None:
-		return None
-	if datetime.datetime.utcnow().timestamp() > US_expiry(US):
-		DEBUG('US expired')
-	else:
-		DEBUG('US unexpired')
-	return datetime.datetime.utcnow().timestamp() > US_expiry(US)
+    @property
+    def expiry(self):
+        return self._expiry.timestamp()
 
-def mkUS(token=None, user=None, expiry=None):
-	return (token, user, expiry) 
+    @property
+    def remaining_validity(self):
+         return str(self._expiry - datetime.datetime.utcnow())
+
+    def __repr__(self):
+        return f'Session(token="{self.token}", username="{self.username}", expiry="{self.expiry}")'
+
+    def __str__(self):
+        return repr(self)
+
+def genereate_session_token(session_username):
+	return hashlib.sha256(bytes8(session_username \
+		+ str(datetime.datetime.now())) \
+		+ orb.bytes8(''.join(random.choices("ABCDEFGHIJ",k=10)))).hexdigest()
 
 def new_session_by_username(session_username):
-	
-	ALERT('start session for user %s ' % session_username)
+	DEBUG('start session for username %s ' % session_username)
+
 	if get_session_by_username(session_username) is not None:
-		# If there is an existing sesion open, drop the old session
-		if NEW_SESSION_BUMPS_OLD:
-			drop_session_by_username(session_username)
-		# If there is an existing sesion open, don't let the new one start
-		else:
-			return None
+        drop_session_by_username(session_username)
 
 	# Make a session_token out of sha256(username + time + random string)
-	session_token = hashlib.sha256(bytes8(session_username \
-		+ str(datetime.datetime.now())) \
-		+ bytes8(''.join(random.choices("ABCDEFGHIJ",k=10)))).hexdigest()
+    session_token = generate_session_token(session_username)
 
-	# sessions expire in SESSION_DAYS * 24 * 60 + SESSION_MINS minutes for now
-	session_expiry = (datetime.datetime.utcnow() + datetime.timedelta(minutes=SESSION_MINS, days=SESSION_DAYS)).timestamp()
+    # session expiration offset is configurable in minutes and days
+	session_expiry = (datetime.datetime.utcnow() + \
+            datetime.timedelta(minutes=CONFIG_SESSIONS_MINS, days=CONFIG_SESSIONS_DAYS)).timestamp()
 
-	sql.do_sessions_comm(sql.SESSION_NEW, mkUS(token=session_token, \
-		user=session_username, expiry=session_expiry))
+	sql.do_sessions_comm(sql.SESSIONS_NEW, Session(session_token, session_username, session_expiry))
 
 	return get_session_by_username(session_username)
 
 def drop_session_by_username(session_username):
-	sql.do_sessions_comm(sql.SESSION_DROP_USER, mkUS(user=session_username))
-	return
+    session_before = get_session_by_username(session_username)
+	sql.do_sessions_comm(sql.SESSIONS_DROP_USER, Session(username=session_username))
+    session_after = get_session_by_username(session_username)
+    if session_before is not None and session_after is None:
+        return session_usernae
 
 def drop_session_by_token(session_token):
-	sql.do_sessions_comm(sql.SESSION_DROP_TOKEN, mkUS(token=session_token))
-	return # FIXME should these return None?
+    session_before = get_session_by_token(session_token)
+	sql.do_sessions_comm(sql.SESSIONS_DROP_TOKEN, Session(token=session_token))
+    session_after = get_session_by_token(session_token)
+    if session_before is not None and session_after is None:
+        return session_before.username
 
-def get_session_by_username(session_username):
-	US = do_sessions_comm(sql.SESSION_GET_USER, mkUS(user=session_username))
-	if US is None:
-		return None	
+def get_session_by_func(session_key, session_partial, sql_comm, get_session_by, drop_session_by):
+    if session := do_sessions_(sql_comm, session_partial) and not session.expired():
+        return session
 
-	# if the current timestamp is greater than session expiry,
-	# purge the old session from the databse and return none 
-	# by re-trying the request
-	if US_expired(US):
-		DEBUG('drop by username %s' % session_username)
-		drop_session_by_username(session_username)
-		return get_session_by_username(session_username)
-
-	return US
+def get_session_by_username(session_username)
+    if session := g
+    (sql_comm, session_partial) and not session.expired():
+        
+    if session := get_session_by_username(session_username, Session(username=session_usename), \
+            sql.SESSIONS_GET_USER, get_session_by_username, drop_session_by_username)
 
 # return none if token is expired and also purge old entry
 def get_session_by_token(session_token):
-	US = sql.do_sessions_comm(sql.SESSION_GET_TOKEN, mkUS(token=session_token))
-	if US is None:
-		return None	
-
-	# if the current timestamp is greater than session expiry,
-	# purge the old session from the databse and return none 
-	# by re-trying the request
-	if US_expired(US):
-		DEBUG('drop by token %s' % session_token)
-		drop_session_by_token(session_token)
-		return get_session_by_token(session_token)
-	return US
-	
-def _handle_check(token, SR):
-	US = get_session_by_token(token)
-
-	if US is not None:
-		username = US_user(US)
-		# include authorized username in HTTP headers
-		return ok_urlencoded(username, SR,
-			extra_headers=[('X-Auth-User', username)])
-	else:
-		return unauth_urlencoded('null', SR)
-
-def handle_check(queries, SR):
-	token = queries.get('token',[''])[0]
-	if len(token) > 0:
-		return _handle_check(token, SR)
-	else:
-		return unauth_urlencoded('null', SR)
-
-def _handle_logout(username, SR):
-	US = get_session_by_username(username)
-
-	# see comment in handle_check()
-	if US is not None:
-		drop_session_by_username(username)
-		return ok_urlencoded(username, SR)
-	else:
-		return notfound_urlencoded('null', SR)
-
-def handle_logout(queries, SR):
-	username = queries.get('username',[''])[0]
-	if len(username) > 0:
-		return _handle_logout(username, SR)
-	else:
-		return ok_urlencoded('null', SR)
-
-def get_pwdhash_by_user(username):
-	comm="select pwdhash from users where username = \"%s\";" % username
-
-	result=do_sqlite3_comm(USERS_DB, comm, fetch=True)
-	if result is not None:
-		result = result[0]
-
-	return result
+    return get_session_by_func(session_token, Session(token=session_token), \
+            sql.SESSIONS_GET_TOKEN, get_session_by_token, drop_session_by_token)
 
 # NOTE: Usage of any password in plaintext outside of this function is a bug
 def check_credentials(username, password):
-	pwdhash=get_pwdhash_by_user(username)
-	ret = pwdhash is not None and bcrypt.checkpw(bytes8(password), bytes8(pwdhash))
-	if ret:
+    if pwdhash := sql.users_get_pwdhash_by_username(username) and \
+            ret := bcrypt.checkpw(bytes8(password), bytes8(pwdhash)):
 		DEBUG(f'[AUTHENTICATED] Correct password for {username}')
 	else:
 		DEBUG(f'Incorrect password for {username}')
-
 	return ret
 
-CREDS_OK	= 0
-CREDS_CONFLICT	= 1
-CREDS_BAD	= 2
-def login_creds_from_body(env):
-	US=None
-	username=''
-	status = CREDS_BAD
-	req_body_size= get_req_body_size(env)
+def urldecode_from_body(self, key)
+		return = html.escape(str8(data.get(bytes8('username'), [b''])[0]))
 
-	if (req_body_size > 0):
-		req_body = env['wsgi.input'].read(req_body_size) 
-		data = parse_qs(req_body)
-
-		# get actual urlencoded body content
-		username = escape(str8(data.get(bytes8('username'), [b''])[0]))
-		password = escape(str8(data.get(bytes8('password'), [b''])[0]))
-		quiet = escape(str8(data.get(bytes8('quiet'), [b'NO'])[0])) == "yes"
-
-		if check_credentials(username, password):
-			# if the password is valid,
-			# try to start a new session right away
-			US = new_session_by_username(username)
-			# session for $username already exists if we still get None
-			status = CREDS_CONFLICT if US is None else CREDS_OK
-
-	if status == CREDS_CONFLICT:
-		US = mkUS(user=username)
-
-	return [US, status, quiet]
 
 def renew_session(US):
 	# refresh US
@@ -286,19 +156,6 @@ def renew_session(US):
 
 	return US
 
-def get_session_from_cookie(env):
-	US=None
-
-	# get auth=$TOKEN from user cookie
-	cookie_user_raw = env.get('HTTP_COOKIE', '')
-	cookie_user = cookies.BaseCookie('')
-	cookie_user.load(cookie_user_raw)
-
-	auth = cookie_user.get('auth', cookies.Morsel())
-	if auth.value is not None:
-		US = get_session_by_token(auth.value)
-
-	return US	
 
 def quietly_generate_token_plaintext(SR, US):
 	SR('200 Ok', [('Content-Type', 'text/plain')])
@@ -306,17 +163,7 @@ def quietly_generate_token_plaintext(SR, US):
 
 
 def generate_page_login(form, SR, extra_headers, msg, logged_in=False):
-	base=''
-
-	nav = ROOT + '/data/header'
-	with open(nav, 'r') as f:
-		base += f.read()
-
-	base += form 
-
-	extra = messageblock([('message', msg), ('appver', appver())])
-
-	return ok_html(base, SR, extra_docs=extra, extra_headers=extra_headers)
+	return ok_html(form, SR, extra_docs=extra, extra_headers=extra_headers)
 
 def check_logout(queries):
 	return queries.get('logout', '') == ['true']
@@ -339,28 +186,25 @@ def build_login_form_html(SR, US, msg, extra_headers):
 
 	return generate_page_login(main_form, SR, extra_headers, msg, logged_in=US is not None)
 		
-def handle_login(queries, SR, env):
+def handle_login(rocket)
 	msg='welcome, please login'
 	
 	# put cookie in here to set user cookie
 	extra_headers = []
 
+:q
 	# check if user $TOKEN valid and authenticate as $USERNAME
-	US = get_session_from_cookie(env)
-	if US:
-		username = US_user(US)
+    if session := rocket.get_session_from_cookie()
+		username = session.username
 		# check if user requests logout
-		if check_logout(queries):
-			DEBUG('logout initiated for %s' % username)
+        if rocket.seeks_to_be('renew', 'true'):
 			drop_session_by_username(username)
 			# clear local cookie on logout
 			extra_headers.append(set_cookie_header("auth", ""))
-			msg = 'logged out %s successfully' % username
-			US = None
+			msg = f'logged out {username} successfully'
 		elif check_renew(queries):
-			DEBUG('renew initiated for %s' % username)
 			US = renew_session(US)
-			if US is not None:
+            if session := rocket.renew
 				msg = 'renewed session for %s' % username
 				extra_headers.append(set_cookie_header("auth", US_token(US)))
 			else:
@@ -383,12 +227,12 @@ def handle_login(queries, SR, env):
 		if login_status == CREDS_BAD:
 			msg = 'incorrect login'
 		elif login_status == CREDS_CONFLICT:
-			msg = 'existing open session for user %s' % US_user(US)
+			msg = f'existing open session for user {US_user(US)}'
 			# US only contains the username when creds conflict
 			# to create this message. Now we clear it to normalize logic
 			US=None
 		elif login_status == CREDS_OK:
-			msg = 'start new session for user %s' % US_user(US)
+			msg = f'start new session for user {US_user(US)}'
 			# we just logged in as $USERNAMAE
 			extra_headers.append(set_cookie_header("auth", US_token(US)))
 
@@ -397,20 +241,18 @@ def handle_login(queries, SR, env):
 	else:
 		return build_login_form_html(SR, US, msg, extra_headers)
 
-def handle_mail_auth(SR, env):
-	username = env.get('HTTP_AUTH_USER', '')
-	password = env.get('HTTP_AUTH_PASS', '')
-	protocol = env.get('HTTP_AUTH_PROTOCOL', '')
-	method = env.get('HTTP_AUTH_METHOD', '')
+def handle_mail_auth(rocket):
 	#this should be impossible if nginx is configured properly
-	if not username or not password or protocol not in ('smtp', 'pop3') or method != 'plain':
-		SR('400 Bad Request', [('Auth-Status', 'Invalid Request')])
-		return ''
+    if not username := rocket.envget('HTTP_AUTH_USER') or \
+            not password := rocket.envget('HTTP_AUTH_PASS') or \
+            protocol := rocket.envget('HTTP_AUTH_PROTOCOL') not in ('smtp', 'pop3') or \
+            method := rocket.envget('HTTP_AUTH_METHOD') != 'plain':
+        return rocket.mail_auth_badreq():
 	if not check_credentials(username, password):
 		#even for incorrect credentials we are to use 200 OK
 		SR('200 OK', [('Auth-Status', 'Invalid Credentials')])
 		return ''
 	comm="select lfx from users where username = \"%s\";" % username
-	(lfx,) = do_sqlite3_comm(USERS_DB, comm, fetch=True)
+	(lfx,) = sql.do_sqlite3_comm(USERS_DB, comm, fetch=True)
 	SR('200 OK', [('Auth-Status', 'OK'), ('Auth-Server', '127.0.0.1'), (('Auth-Port', '1465' if protocol == 'smtp' else '1995') if not lfx else ('Auth-Port', '1466' if protocol == 'smtp' else '1996'))])
 	return ''

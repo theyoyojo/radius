@@ -21,7 +21,7 @@ def do_sqlite3_comm(comm, commit=False, fetch=False):
 
 	return result
 
-SUBMISSIONS_GET_STUDENT_ASSIGNMENT="""
+SUBMISSIONS_GET_BY_STUDENT_AND_ASSIGNMENT="""
 SELECT (submission_id, student_id, assignment_id,
     submission_name, submission_grade, submission_comments)
 FROM submissions
@@ -29,90 +29,81 @@ WHERE student_id = "{}"
 AND assignment_id = "{}";
 """.strip()
 
+def submissions_get_by_student_and_assignment(sid, aid):
+    do_sqlite3_comm(SUBMISSIONS_GET_STUDENT_ASSIGNMENTS, fetch=True)
+
 ASSIGNMENTS_GET_ALL="""
 SELECT *
 FROM assignments;
 """.strip()
 
-STUDENTS_GET_ID_STUDENT="""
-SELECT student_id
-FROM students
+def submissions_get_all():
+    do_sqlite3_comm(SUBMISSIONS_GET_ALL, fetch=True)
+
+SESSIONS_GET_BY_TOKEN="""
+SELECT token, username, expiry
+FROM sessions
+WHERE token = "{}";
+""".strip()
+
+def sessions_get_by_token(s):
+    do_sqlite3_comm(SESSIONS_GET_BY_TOKEN.format(s.token), fetch=True)
+
+SESSIONS_GET_BY_USERNAME="""
+SELECT token, username, expiry
+FROM sessions
 WHERE username = "{}";
 """.strip()
 
-STUDENTS_INSERT_NEW="""
-INSERT INTO students (student_id, username)
-VALUES ("{}", "{}");
-""".strip()
+def sessions_get_by_username(s):
+    do_sqlite3_comm(SESSIONS_GET_BY_USERNAME.format(s.username), fetch=True)
 
-def grades_db_exec(cmd, commit=False):
-    print(f"RUN SQL '{cmd}'")
-    result = do_sqlite3_comm(cmd, fetch=True, commit=commit)
-
-    return result
-
-def session_enum():
-	session_enum.cnt += 1
-	return session_enum.cnt
-session_enum.cnt = 0
-
-# data = (token,..)
-SESSION_GET_TOKEN=session_enum()
-SESSION_GET_TOKEN_COMM="""
-SELECT token, user, expiry
-FROM sessions
-WHERE token = "{}";
-""".strip()
-
-# data = (...,user,...)
-SESSION_GET_USER=session_enum()
-SESSION_GET_USER_COMM="""
-SELECT token, user, expiry
-FROM sessions
-WHERE user= "{}";
-""".strip()
-
-# data = (token, user, expiry)
-SESSION_NEW=session_enum()
-SESSION_NEW_COMM="""
-INSERT INTO sessions (token, user, expiry)
+SESSIONS_NEW="""
+INSERT INTO sessions (token, username, expiry)
 VALUES ("{}", "{}", "{}");
 """.strip()
 
-# data = (token,..)
-SESSION_DROP_TOKEN=session_enum()
-SESSION_DROP_TOKEN_COMM = """
+def sessions_new(s):
+	return do_sqlite3_comm(SESSIONS_NEW_COMM.format(s.username, s.token, s.expiry), commit=True)
+
+SESSIONS_DROP_BY_TOKEN= """
 DELETE FROM sessions
 WHERE token = "{}";
 """.strip()
 
-# data = (...,user,...)
-SESSION_DROP_USER=session_enum()
-SESSION_DROP_USER_COMM = """
+def sessions_drop_by_token(s):
+	return do_sqlite3_comm(SESSIONS_DROP_BY_TOKEN.format(s.token), commit=True)
+
+SESSIONS_DROP_BY_USERNAME= """
 DELETE FROM sessions
-WHERE user = "{}";
+WHERE username = "{}";
 """.strip()
 
-def _do_sessions_comm(comm, commit=False, fetch=False):
-	return do_sqlite3_comm(SESSIONS_DB, comm, commit=commit, fetch=fetch)
+def sessions_drop_by_username(s):
+	return do_sqlite3_comm(SESSIONS_DROP_BY_USER.format(s.name), commit=True)
 
-def do_sessions_comm(comm, US=None):
-	if	 comm == SESSION_NEW:
-		return _do_sessions_comm(SESSION_NEW_COMM % US, commit=True)
-	elif comm == SESSION_GET_TOKEN:
-		return _do_sessions_comm(SESSION_GET_TOKEN_COMM % (US_token(US)), fetch=True)
-	elif comm == SESSION_GET_USER:
-		return _do_sessions_comm(SESSION_GET_USER_COMM % (US_user(US)), fetch=True)
-	elif comm == SESSION_DROP_TOKEN:
-		return _do_sessions_comm(SESSION_DROP_TOKEN_COMM % (US_token(US)), commit=True)
-	elif comm == SESSION_DROP_USER:
-		return _do_sessions_comm(SESSION_DROP_USER_COMM % (US_user(US)), commit=True)
-	else:
-		DEBUG("unknown sessions comm type")
-		return None	
+SESSIONS_GET_ALL="""
+SELECT id, username, pwdhash, lfx
+FROM users;
+""".strip()
 
-USERS_GET_PWDHASH="""
+def sessions_get_all():
+	return do_sqlite3_comm(SESSIONS_GET_ALL, fetch=True)
+
+
+USERS_GET_PWDHASH_BY_USERNAME="""
 SELECT pwdhash
 FROM users
 WHERE username = "{}"
 """.strip()
+
+def users_get_pwdhash_by_username(u):
+    return do_sqlite3_comm(USERS_GET_PWDHASH.format(u), fetch=True)
+
+USERS_NEW="""
+INSERT INTO users (username, pwdhash, lfx, student_id)
+VALUES ("{}", "{}", "{}", "{}");"
+""".strip()
+
+def users_new(u, p, l=False, i=0)
+    return do_sqlite3_comm(USERS_GET_PWDHASH_COMM.format(u, p, l, i), commit=True)
