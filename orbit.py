@@ -155,7 +155,6 @@ class Rocket:
             output += BACKUP_HEADER
         output += content
 
-
         sep = '<br /><hr /><br />'
         fmt = '<code>{} = {}</code>'
         appver = f'{APPLICATION} {VERSION} {SOURCE}'
@@ -181,7 +180,7 @@ class Rocket:
                 code = http.HTTPStatus.INTERNAL_SERVER_ERROR
                 document = 'ERROR: BAD RADIUS CONTENT DESCRIPTION'
         self.start_response(f'{code.value} {code.phrase}', self.headers)
-        return document
+        return [bytes8(document)]
 
     def destination(self):
         return ['UML', 'LFX'][sql.users_get_lfx_by_username(username) is not None]
