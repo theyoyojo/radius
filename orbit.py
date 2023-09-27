@@ -13,8 +13,7 @@ ORBIT_PREFIX= os.environ.get('ORBIT_PREFIX')
 HOSTNAME = os.environ.get('SRVNAME')
 DATA_ROOT = f'{ORBIT_PREFIX}{HOSTNAME}'
 
-# Simply utilitys
-
+# Simple utilities
 def bytes8(string):
 	return bytes(string, "UTF-8")
 
@@ -23,18 +22,6 @@ def str8(string):
 
 def DEBUG(strg):
     print(strg, file=sys.stderr)
-
-def appver():
-    return f'{APPLICATION} {VERSION} {SOURCE}'
-
-def messageblock(lst):
-    sep = '<br /><hr /><br />'
-    res = sep
-    for item in lst:
-        res += f'<code>{item[0]} = {item[1]}</code><br />'
-    res += sep
-
-    return res
 
 # Source: https://stackoverflow.com/questions/14107260/set-a-cookie-and-retrieve-it-with-python-and-wsgi
 def set_cookie_header(name, value, days=CONFIG_SESSION_DAYS, minutes=CONFIG_SESSION_MINS):
@@ -57,27 +44,26 @@ class Rocket:
         self.user_auth_token = None
         self._session = None
         self.alerts = None
-        self.captains_log = None
+        self._msg = "(silence)"
         self.headers = []
         self.format = lambda x: x
 
     def __str__(self):
         return ( f'Rocket (\n\t'
-                 f'METHOD:\t{self.method_str()}\n\t'
+                 f'METH:\t{self.method_str()}\n\t'
                  f'PATH:\t{self.path_info}\n\t'
-                 f'QUERY:\t{self.query_sring}\n\t'
-                 f'AUTH:\t{self.user_auth_token}\n\t'
-                 f'SESH:\T{str(self._session)}\n'
+                 f'QURY:\t{self.query_sring}\n\t'
+                 f'COOK:\t{self.cookie_user_raw}\n\t'
+                 f'SESH:\t{str(self._session)}\n'
+                 f'MESG:\t{self._msg}\n'
+                 f'HEAD:\t{self.headers}\n'
                  f')\n' )
 
     def alert(self, msg):
         alerts += [f'<hr /><i>{msg}</i><hr />']
 
-    def caplog(self, msg):
-        self.captains_log = msg
-
-    def urldecode_from_body(self, key):
-        return html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
+    def msg(self, msg):
+        self._msg = msg
 
     # usage of Rocket.session idempotently loads the user cookie if it exists
     @property
@@ -118,8 +104,9 @@ class Rocket:
             data = parse_qs(self.envget['wsgi.input'].read())
 
             # get actual urlencoded body content
-            username = self.urldecode_from_body('username')
-            password = self.urldecode_from_body('password')
+            urldecode = lambda key: html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
+            username = urldecode('username')
+            password = urldecode('password')
 
         self._session = auth.login(username, password)
         if self.session:
@@ -146,8 +133,8 @@ class Rocket:
         match content_type.split('/'):
             case ['text', subtype]:
                 self.headers += [('Content-Type', f'text/{subtype}')]
-                if subtype= 'html':
-                    self.format = format_html
+                if subtype == 'html':
+                    self.format = self.format_html
             case ['auth', 'badreq']:
                 self.headers += [('Auth-Status', 'Invalid Request')]
             case ['auth', 'badcreds']:
@@ -167,40 +154,38 @@ class Rocket:
         except Exception as e:
             output += BACKUP_HEADER
         output += content
-        output += messageblock(('appver', appver()),
-                ('msg', str(self.captains_log))] if self.captains_log is not None else []
+
+
+        sep = '<br /><hr /><br />'
+        fmt = '<code>{} = {}</code>'
+        appver = f'{APPLICATION} {VERSION} {SOURCE}'
+
+        pair_fmt = lambda fmt: (lambda pr: fmt.format(pr[0], pr[1]))
+        pair_join= lambda pair_list: '<br />'.join(pair_list)
+
+        call_within_sep = lambda x, y, z: z + x(y) + z
+        pair_list_fmt = lambda pair_list: pair_join([pair_fmt(fmt)(pr) for pr in pair_list])
+        msg_factory = lambda pair_list: call_within_sep(pair_list_fmt, pair_list, sep)
+
+        output += msg_factory([('appver', appver), ('msg', self._msg)])
         return output
 
-    def respond(self, *content_desciption)
-        match content_description:
-            case (code, content_type, content) and self.parse_content_type(content_type):
-                # This is the __only__ call site of start_respoinse in in this application
-                # All user requests eventually end up here 
+    def respond(self, *content_desc):
+        # This is the __only__ call site of start_respoinse in in this application
+        # All user requests eventually end up here 
+        match content_desc:
+            case (code, content_type, content) if self.parse_content_type(content_type):
                 document = self.format(content)
             case _:
                 self.parse_content_type('text/plain')
                 code = http.HTTPStatus.INTERNAL_SERVER_ERROR
                 document = 'ERROR: BAD RADIUS CONTENT DESCRIPTION'
-            self.start_response(f'{code.value} {code.phrase}', self.headers)
-            return document
+        self.start_response(f'{code.value} {code.phrase}', self.headers)
+        return document
 
-    def get_lfx_status(self):
-        return sql.users_get_lfx_by_username(username) is not None
-
-    def get_req_body_size(self):
-        try:
-            req_body_size = int(self.environ.get('CONTENT_LENGTH', 0))
-        except ValueError:
-            req_body_size = 0
-        
-        return req_body_size
-
-    def is_post_req(self):
-        return self.get_req_body_size() > 0
+    def destination(self):
+        return ['UML', 'LFX'][sql.users_get_lfx_by_username(username) is not None]
 
     @ property
     def method(self):
-        if self.is_post_req():A
-            return "POST"
-        else:
-            return "GET"
+        return ['GET', 'POST'][int(self.environ.get('CONTENT_LENGTH', 0)) > 0]

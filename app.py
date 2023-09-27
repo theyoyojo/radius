@@ -10,13 +10,13 @@ def handle_welcome(rocket):
     match rocket.queries:
         case ('logout', 'true'):
             rocket.retire()
-            rocket.caplog(f'{rocket.username} logout')
+            rocket.msg(f'{rocket.username} logout')
             gen_form = orbgen.form_login()
         case ('renew', 'true'):
             rocket.refuel()
-            rocket.caplog(f'{rocket.username} renew')
+            rocket.msg(f'{rocket.username} renew')
         case _:
-            rocket.caplog(f'{rocket.username} authenticated by token')
+            rocket.msg(f'{rocket.username} authenticated by token')
     return rocket.respond(HTTPStatus.OK, 'text/html', gen_form())
 
 def handle_login(rocket):
@@ -25,12 +25,12 @@ def handle_login(rocket):
     gen_form = orbgen.form_login
     if  rocket.method == "POST":
         if rocket.launch():
-            rocket.caplog(f'{rocket.username} authenticated by password')
+            rocket.msg(f'{rocket.username} authenticated by password')
             gen_form = orbgen.form_welcome
         else:
-            rocket.caplog(f'authentication failure')
+            rocket.msg(f'authentication failure')
     else:
-        rocket.caplog('welcome, please login')
+        rocket.msg('welcome, please login')
     return rocket.respond(HTTPStatus.OK, 'text/html', orbgen.gen_form())
 
 def handle_mail_auth(rocket):
@@ -70,7 +70,7 @@ def handle_dashboard(rocket):
     return rocket.ok_html(isis(rocket.user))
 
 def handle_register(rocket):
-    if rocket.is_post_req():
+    if rocket.method() == "POST":
         # TODO
         pass
         
@@ -85,7 +85,7 @@ def try_handle_md(rocket):
             os.access(f'{orbit.DATA_ROOT}/md{rocket.path_info}', os.R_OK):
         return handle_md(rocket)
     else:
-        return rocket.notfound_html('HTTP 404 Not Found')
+        return rocket.respond(HTTPStatus.NOT_FOUND, 'text/html', 'HTTP 404 NOT FOUND')
 
 def application(env, SR):
     rocket = orbit.Rocket(env, SR)
