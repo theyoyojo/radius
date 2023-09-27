@@ -3,12 +3,17 @@
 import requests, os, sys, http, urllib
 from config import CONFIG_SESSION_MINS, CONFIG_SESSION_DAYS
 
+# Application constants
+# TODO: move to config?
+
 APPLICATION = 'radius'
 VERSION = '0.1'
 SOURCE = 'https://github.com/underground-software/radius'
 ORBIT_PREFIX= os.environ.get('ORBIT_PREFIX')
 HOSTNAME = os.environ.get('SRVNAME')
 DATA_ROOT = f'{ORBIT_PREFIX}{HOSTNAME}'
+
+# Simply utilitys
 
 def bytes8(string):
 	return bytes(string, "UTF-8")
@@ -53,7 +58,8 @@ class Rocket:
         self._session = None
         self.alerts = None
         self.captains_log = None
-        self.extra_headers = []
+        self.headers = []
+        self.format = lambda x: x
 
     def __str__(self):
         return ( f'Rocket (\n\t'
@@ -72,24 +78,26 @@ class Rocket:
 
     def urldecode_from_body(self, key):
         return html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
-    
-    def seeks(self, key):
-        return queries.get(key, [''])[0]
 
-    def seeks_to_find(self, key, val):
-        return self.seeks(key) == val
-
+    # usage of Rocket.session idempotently loads the user cookie if it exists
     @property
     def session(self):
         if self.user_auth_token is None:
             self.load_user_auth_token()
-        self._session = auth.get_session_by_token(self.user_auth_token)
+            self._session = auth.get_session_by_token(self.user_auth_token)
         return self._session
 
     @property
     def username(self):
-        if self.session is not None:
-            return self._session.user
+        return self._session.username   if self.session else None
+
+    @property
+    def token(self):
+        return self._session.token      if self.session else None
+
+    @property
+    def expiry(self):
+        return self._session.expiry     if self.session else None
 
     
     def load_user_auth_cookie(self):
@@ -104,7 +112,8 @@ class Rocket:
             return self.user_auth_token
 
     # Attempt login using urelencoded credentials from request boy
-    def launch(self):
+    # or directly attempt login
+    def launch(self, username='', password=''):
         if self.is_post_req():
             data = parse_qs(self.envget['wsgi.input'].read())
 
@@ -112,9 +121,9 @@ class Rocket:
             username = self.urldecode_from_body('username')
             password = self.urldecode_from_body('password')
 
-            self._session = auth.login(username, password)
-            if self.session:
-                self.extra_headers += set_cookie_header("auth", session.token)
+        self._session = auth.login(username, password)
+        if self.session:
+            self.extra_headers += set_cookie_header("auth", session.token)
 
     # Renew current sesssion and set user auth cookie accordingly
     def refuel(self):
@@ -132,97 +141,48 @@ class Rocket:
     def envget(self, key):
         return self.environment.get(key, '')
 
-    # Load header from data root
-    # This generally includes the stylesheet, logo, title, and navigation
-    # Append any alerts right below this header
-    def header(self):
+    # Set appropriate headers
+    def parse_content_type(self, content_type):
+        match content_type.split('/'):
+            case ['text', subtype]:
+                self.headers += [('Content-Type', f'text/{subtype}')]
+                if subtype= 'html':
+                    self.format = format_html
+            case ['auth', 'badreq']:
+                self.headers += [('Auth-Status', 'Invalid Request')]
+            case ['auth', 'badcreds']:
+                self.headers += [('Auth-Status', 'Invalid Credentials')]
+            case ['auth', auth_port]:
+                self.headers += [('Auth-Status', 'OK'), ('Auth-Port', auth_port),
+                        ('Auth-server', '127.0.0.1')]
+            case _:
+                return False
+        return True
+
+    def format_html(self, content):
+        output = ''
         try:
             with open(f'{ROOT}/{SRVNAME}/data/header', 'r') as f:
-                    return f.read() + "".join(self.alerts)
+                    output += "".join(self.alerts)
         except Exception as e:
-            return BACKUP_HEADER
+            output += BACKUP_HEADER
+        output += content
+        output += messageblock(('appver', appver()),
+                ('msg', str(self.captains_log))] if self.captains_log is not None else []
+        return output
 
-    # Generate the page footer using our messageblock helper
-    # Set the value of message to the string of whatever is in the captains log
-    def footer(self):
-        msglist = [('appver', appver())]
-        if self.captains_log is not None:
-            msglist += [('msg', str(self.captains_log))]
-        return messageblock(msglist)
-
-    # This is the __only__ call site of start_respoinse in in this application
-    # All user requests eventually end up here 
-    def __do_response_http(self, content, content_type, headers=[], return_code='200 OK'):
-        self.start_response(return_code,  headers)
-        return [bytes8(content))]
-
-    def _do_response_http(self, content, content_type, headers=[], return_code='200 OK'):
-        return self.__do_http_response(self, content, [('Content-Type', content_type)] + headers, return_code)
-
-    def _do_ok_response(self, content, extra_content, content_type, headers=[]):
-        return self._do_http_response(content + ''.join(extra_content), content_type, headers, '200 OK')
-
-    def _do_unauth_response(self, content, content_type, headers=[]):
-        return self._do_http_response(content, content_type, headers, '401 Unauthorized')
-
-    def _do_notfound_response(self, content, content_type, headers=[]):
-        return self._do_http_response(content, content_type, headers, '404 Not Found')
-
-    def _do_illegal_response(self, content, content_type, headers=[]):
-        return self._do_http_response(content, content_type, headers, '451 Unavailable For Legal Reasons')
-
-    def response_html(self, content, extra_headers=[], extra_docs=[])
-        return self._do_response_http(self.header() +  content + self.footer(),
-            extra_content=extra_docs, content_type='text/html', headers=self.extra_headers)
-
-    def ok_html(self, content, extra_docs=[]):
-
-    def ok_text(self, content, extra_text=[]):
-        return self._do_ok_response(content, extra_content=extra_text, content_type='text/plain', headers=self.extra_headers)
-
-    def ok_urlencoded(self, content, extra_content=[], extra_headers=[]):
-        return self._do_ok_response(content, extra_content=extra_content, \
-                content_type='application/x-www-form-urlencoded', extra_headers=extra_headers)
-
-    def unauth_text(self, content):
-        return self._do_unauth_response(content, 'text/html')
-
-    def unauth_text(self, content):
-        return self._do_unauth_response(content, 'text/plain')
-
-    def unauth_urlencoded(self, content):
-        return self._do_unauth_response(content, 'application/x-www-form-urlencoded')
-
-    def notfound_html(self, content):
-        return self._do_notfound_response(content, 'text/html')
-
-    def notfound_text(self, content):
-        return self._do_notfound_response(content, 'text/plain')
-
-    def notfound_urlencoded(self, content):
-        return self._do_notfound_response(content, 'application/x-www-form-urlencoded')
-
-    def illegal_html(self, content):
-        return self._do_illegal_response(content, 'text/html')
-
-    def illegal_text(self, content):
-        return self._do_illegal_response(content, 'text/plain')
-
-    def illegal_urlencoded(self, content):
-        return self._do_illegal_response(content, 'application/x-www-form-urlencoded')
-
-    def mail_auth_badreq(self):
-        return self.__do_http_response('', [('Auth-Status', 'Invalid Request')], '400 Bad Request')
-
-    def mail_auth_ok_invalid(self):
-        return self.__do_http_response('', [('Auth-Status', 'Invalid Credentials')], '200 ')
-
-    def mail_auth_ok(self, auth_port):
-        self.extra_headers += [('Auth-Status',    'OK')]
-        self.extra_headers += [('Auth-Port',      auth_port)]
-        self.extra_headers += [('Auth-server',    '127.0.0.1')]
-
-        return self.__do_http_response('',self.extra_headers, '200 OK')
+    def respond(self, *content_desciption)
+        match content_description:
+            case (code, content_type, content) and self.parse_content_type(content_type):
+                # This is the __only__ call site of start_respoinse in in this application
+                # All user requests eventually end up here 
+                document = self.format(content)
+            case _:
+                self.parse_content_type('text/plain')
+                code = http.HTTPStatus.INTERNAL_SERVER_ERROR
+                document = 'ERROR: BAD RADIUS CONTENT DESCRIPTION'
+            self.start_response(f'{code.value} {code.phrase}', self.headers)
+            return document
 
     def get_lfx_status(self):
         return sql.users_get_lfx_by_username(username) is not None
@@ -238,8 +198,9 @@ class Rocket:
     def is_post_req(self):
         return self.get_req_body_size() > 0
 
-    def method_str(self):
-        if self.is_post_req():
+    @ property
+    def method(self):
+        if self.is_post_req():A
             return "POST"
         else:
             return "GET"

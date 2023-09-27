@@ -101,7 +101,7 @@ def logout_buttons():
         input_(' id="renew" method="get" action="/" ') + \
         button('Renew', 0, ' type="submit" class="renew" '))
 
-def form_authorized(session):
+def form_welcome(session):
     return div(' class="logout_ifo" ', div(' class="logout_left" ', gen_cookie_info_table(session)) + \
         div(' class="logout_right" ',
             div(' class="logout_right_inner" ', h5("Welcome!") + ul([a('Dashboard', '/dashboard')]))))  + \

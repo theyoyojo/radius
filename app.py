@@ -3,56 +3,47 @@
 import markdown, os, sys, re
 import orbit, auth, orbgen
 from isis import isis
+from http import HTTPStatus
 
-def handle_authenticated_login(rocket):
-        if rocket.seeks_to_find('logout', 'true'):
+def handle_welcome(rocket):
+    gen_form = orbgen.form_welcome
+    match rocket.queries:
+        case ('logout', 'true'):
             rocket.retire()
             rocket.caplog(f'{rocket.username} logout')
-            return rocket.ok_html(orbgen.form_login())
-        elif rocket.seeks_to_find('renew', 'true'):
+            gen_form = orbgen.form_login()
+        case ('renew', 'true'):
             rocket.refuel()
-            rocket.caplog(f'{rocket.username} renew session')
-        else:
+            rocket.caplog(f'{rocket.username} renew')
+        case _:
             rocket.caplog(f'{rocket.username} authenticated by token')
-        return rocket.ok_html(orbgen.form_authorized())
-
-def handle_authorization_attempt(rocket):
-    if rocket.launch():
-        rocket.caplog(f'{rocket.username} authenticated by password')
-        return rocket.ok_html(orbgen.form_authorized())
-    else:
-        rocket.caplog(f'authentication failure')
-        return rocket.ok_html(orbgen.form_login())
-
-def handle_unauthorized_login(rocket):
-    if rocket.is_post_req():
-        return handle_authorization_attempt(rocket)
-    else:
-        rocket.caplog('welcome, please login')
-        return rocket.ok_html(orbgen.form_login())
+    return rocket.respond(HTTPStatus.OK, 'text/html', gen_form())
 
 def handle_login(rocket):
     if rocket.session:
-        return handle_authenticated_login(rocket)
+        return handle_welcome()
+    gen_form = orbgen.form_login
+    if  rocket.method == "POST":
+        if rocket.launch():
+            rocket.caplog(f'{rocket.username} authenticated by password')
+            gen_form = orbgen.form_welcome
+        else:
+            rocket.caplog(f'authentication failure')
     else:
-        return handle_unauthorized_login(rocket)
+        rocket.caplog('welcome, please login')
+    return rocket.respond(HTTPStatus.OK, 'text/html', orbgen.gen_form())
 
 def handle_mail_auth(rocket):
     # This should be invariant when ngninx is configured properly
-    if username := rocket.envget('HTTP_AUTH_USER') is None:
-        return rocket.mail_auth_badreq()
-        
-    if password := rocket.envget('HTTP_AUTH_PASS') is None:
-        return rocket.mail_auth_badreq()
+    mail_env_vars = ('HTTP_AUTH_USER' 'HTTP_AUTH_PASS', 'HTTP_AUTH_PROTOCOL', 'HTTP_AUTH_METHOD')
+    [username, passwprd, protocol, method] = [rocket.envget(key) for key in mail_env_vars]
 
-    if protocol := rocket.envget('HTTP_AUTH_PROTOCOL') not in ('smtp', 'pop3'):
-        return rocket.mail_auth_badreq()
+    if not username or not password or protocol not in ('smtp', 'pop') or method != 'plain':
+        return rocket.respond(HTTPStatus.BAD_REQUEST, 'auth/badreq', '')
 
-    if method   := rocket.envget('HTTP_AUTH_METHOD') != 'plain':
-        return rocket.mail_auth_badreq()
-
-    if not login(username, password):
-        return rocket.mail_auth_ok_invalid()
+    # A valid request with bad credentials returns OK
+    if not rocket.launch(username, password):
+        return rocket.respond(HTTPStatus.OK, 'auth/badcreds', '')
 
     # auth port depends on whether we are and lfx user and which service we are using
     auth_port = {
@@ -60,7 +51,7 @@ def handle_mail_auth(rocket):
             True    : { 'smtp': '1466', 'pop': '1966' }
     }[get_lfx_status(username)][protocol]
 
-    return rocket.mail_auth_ok(auth_port)
+    return rocket.respond(HTTPStatus.BAD_REQUEST, 'auth/badreq', '')
 
 def handle_check(rocket):
     if token := rocket.seeks('token'):
@@ -88,7 +79,6 @@ def handle_register(rocket):
 def handle_md(rocket):
     with open(fname, 'r', newline='') as f:
         return rocket.ok_html(markdown.markdown(f.read(), extensions=['tables', 'fenced_code']))
-
 
 def try_handle_md(rocket):
     if re.match("^(?!/cgit)(.*\.md)$", rocket.path_info) and \
