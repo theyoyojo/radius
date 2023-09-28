@@ -7,15 +7,12 @@ def do_sqlite3_comm(comm, commit=False, fetch=False):
     result=None
     db_con = sqlite3.connect(ORBIT_DB)
     db_cur0 = db_con.cursor()
-    
     db_cur1 = db_cur0.execute(comm)
 
     if fetch:
         result=db_cur1.fetchone()
-
     if commit:
         db_cur2 = db_cur1.execute("COMMIT;")
-
     db_con.close()
 
     return result
@@ -29,7 +26,7 @@ AND assignment_id = "{}";
 """.strip()
 
 def submissions_get_by_student_and_assignment(sid, aid):
-    do_sqlite3_comm(SUBMISSIONS_GET_STUDENT_ASSIGNMENTS, fetch=True)
+    return do_sqlite3_comm(SUBMISSIONS_GET_STUDENT_ASSIGNMENTS, fetch=True)
 
 SUBMISSIONS_GET_ALL="""
 SELECT *
@@ -37,7 +34,7 @@ FROM submissions;
 """.strip()
 
 def submissions_get_all():
-    do_sqlite3_comm(SUBMISSIONS_GET_ALL, fetch=True)
+    return do_sqlite3_comm(SUBMISSIONS_GET_ALL, fetch=True)
 
 SESSIONS_GET_BY_TOKEN="""
 SELECT token, username, expiry
@@ -46,7 +43,7 @@ WHERE token = "{}";
 """.strip()
 
 def sessions_get_by_token(s):
-    do_sqlite3_comm(SESSIONS_GET_BY_TOKEN.format(s.token), fetch=True)
+    return do_sqlite3_comm(SESSIONS_GET_BY_TOKEN.format(s.token), fetch=True)
 
 SESSIONS_GET_BY_USERNAME="""
 SELECT token, username, expiry
@@ -55,7 +52,7 @@ WHERE username = "{}";
 """.strip()
 
 def sessions_get_by_username(s):
-    do_sqlite3_comm(SESSIONS_GET_BY_USERNAME.format(s.username), fetch=True)
+    return do_sqlite3_comm(SESSIONS_GET_BY_USERNAME.format(s.username), fetch=True)
 
 SESSIONS_NEW="""
 INSERT INTO sessions (token, username, expiry)
@@ -67,7 +64,8 @@ def sessions_new(s):
 
 SESSIONS_DROP_BY_TOKEN= """
 DELETE FROM sessions
-WHERE token = "{}";
+WHERE token = "{}"
+RETURNING username;
 """.strip()
 
 def sessions_delete_by_token(s):
@@ -75,7 +73,8 @@ def sessions_delete_by_token(s):
 
 SESSIONS_DROP_BY_USERNAME= """
 DELETE FROM sessions
-WHERE username = "{}";
+WHERE username = "{}"
+RETURNING username;
 """.strip()
 
 def sessions_delete_by_username(s):

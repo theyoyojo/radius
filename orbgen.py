@@ -1,8 +1,8 @@
-def h(v, c):
-    return f'<h{v}>{c}</h{v}'
+def h(v, c, cls='', attrs=''):
+    return f'<h{v} class="{cls}" {attrs} >{c}</h{v}>'
 
-def h1(c):
-    return h(1, c)
+def h1(c, cls=''):
+    return h(1, c, cls=cls)
 
 def h2(c):
     return h(2, c)
@@ -50,8 +50,14 @@ def table(c, i=0):
         h=False
     return oxo(i, '<table>', t, '</table>')
 
+def img(src, alt='', cls='', attrs='')
+    return f'<img src="{src}" alt="{alt}" class="{class}" {attrs} />'
+
 def div(attr="", c="", i=0):
     return oxo(i, f'<div{attr}>', c, '</div>')
+
+def code(attr="", c="", i=0):
+    return oxo(i, f'<code{attr}>', c, '</code>')
 
 def li(c):
     return o(c)
@@ -59,8 +65,11 @@ def li(c):
 def ul(c, i=0):
     return oxo(i, f'<ul>', '\n'.join([li(_li) for _li in c]), '</ul>')
 
-def a(text, href):
-    return f'<a href="{href}">{text}</a>'
+def a(text, href, attrs=''):
+    return f'<a {attrs} hrref="{href}">{text}</a>'
+
+def nav_button(href, text):
+    return a(href, text, attrs=' class="nav" ')
 
 def button(c, i=0, a=''):
     return oOo(i, f'<button {a}>', c, '</button>')
@@ -68,12 +77,35 @@ def button(c, i=0, a=''):
 def input_(attr=''):
     return f'<input {attr} >'
 
+def bytes8(string):
+	return bytes(string, "UTF-8")
+
+def str8(string):
+	return str(string, "UTF-8")
+
+def DEBUG(strg):
+    print(strg, file=sys.stderr)
+
 def label(attr='', c=''):
     return f'<label {attr} >{c}</label>'
 
+_pair_fmtr = lambda fmt: (lambda pr: fmt.format(pr[0], pr[1]))
+_pair_join= lambda pair_list: '<br />'.join(pair_list)
+
+
+_sepr_call = lambda x, y, z: z + x(y) + z
+_pair_fmtr = lambda pair_list: pair_join([pair_fmtr(fmt)(pr) for pr in pair_list])
+
+msg_blk = lambda pair_list: _sepr_call(_par, pair_list, sep)
+"""
+orbgen.msg_blk(func, pair):
+    components of a pair to 
+(callable_func, pair):
+    return a pair of the results of each invocatio
+"""
+
 def form(attr, c):
     return f'<form {attr} >{c} </form>'
-
 
 def form_login():
     return form(' id="login" method="post" action="/login" ',

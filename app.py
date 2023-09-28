@@ -1,8 +1,7 @@
 #!/:in/env python3
 
 import markdown, os, sys, re
-import orbit, auth, orbgen
-from isis import isis
+import orbit, auth, orbgen, isis
 from http import HTTPStatus
 
 def handle_welcome(rocket):
@@ -54,44 +53,65 @@ def handle_mail_auth(rocket):
     return rocket.respond(HTTPStatus.BAD_REQUEST, 'auth/badreq', '')
 
 def handle_check(rocket):
-    if token := rocket.seeks('token'):
-        session_found = auth.get_session_by_token(token)
-        return rocket.ok_text(session_found.user)
+    if rocket.token_from_query() and rocket.session:
+        return rocket.respond(HTTPStatus.OK, 'text/plain', session.username)
     else:
-        return rocket.illegal_text('null')
+        return rocket.respond(HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS, 'text/plain', 'null')
 
 def handle_logout(rocket):
-    if user := rocket.seeks('username'):
-        return rocket.ok_text(auth.drop_session_by_username(user))
+    if rocket.queryget('username') and self.session:
+        return rocket.respond(HTTPStatus.OK, 'text/plain',
+            auth.del_session_by_username(self.username))
     else:
-        return rocket.illegal_text('null')
+        return rocket.respond(HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS, 'text/plain', 'null')
 
 def handle_dashboard(rocket):
-    return rocket.ok_html(isis(rocket.user))
+    return rocket.respond(HTTPStatus.OK, 'text/html', isis.isis(rocket.user))
+
+def handle_stub(rocket, more=[]):
+        make_cont = lambda meth_path: f'<h3>Developmennt sub for {meth_path} </h3>{"".join(more)}'
+        meth_path = f'{rocket.method()} {rocket.path_info}'
+        return rocket.respond(HTTPStatus.OK, 'text/plain', make_cont(meth_path))
 
 def handle_register(rocket):
-    if rocket.method() == "POST":
-        # TODO
-        pass
-        
-    return rocket.ok_html(orbgen.form_register())
+    return handle_stub(rocket, [f'{orbgen.code(OLD_NOTES)}'])
 
-def handle_md(rocket):
-    with open(fname, 'r', newline='') as f:
-        return rocket.ok_html(markdown.markdown(f.read(), extensions=['tables', 'fenced_code']))
+OLD_NOTES="""
+	form_data = parse_qs(env['wsgi.input'].read(int(env['CONTENT_LENGTH'])))
+	print(form_data)
+	if b'student_id' not in form_data or len(form_data[b'student_id']) != 1:
+		start_response('400 Bad Request', [('Content-Type', 'text/html')])
+		return '<h1>Bad Request</h1><br>\n'
+	result = accounts_db_exec(FIND_ACCOUNT_QUERY % escape(str(form_data[b'student_id'][0],'utf-8')))
+	if not result:
+		start_response('200 OK', [('Content-Type', 'text/html')])
+		return '<h1>No such user</h1><br>\n'
+	((id, username, password),) = result
+	accounts_db_exec(DELETE_ACCOUNT_QUERY % id, commit=True)
+	start_response('200 OK', [('Content-Type', 'text/html')])
+	return f'''\
+	<h1>Save these credentials, you will not be able to access them again</h1><br>
+	<h3>Username: {username}</h1><br>
+	<h3>Password: {password}</h1><br>
+    return rocket.respond(orbgen.form_register())
+""".strip()
+
+def handle_md(rocket, md_path):
+    with open(md_path, 'r', newline='') as f:
+        content = markdown.markdown(f.read(), extensions=['tables', 'fenced_code'])
+        return rocket.respond(HTTPStatus.OK, 'text/html', content)
 
 def try_handle_md(rocket):
-    if re.match("^(?!/cgit)(.*\.md)$", rocket.path_info) and \
-            os.access(f'{orbit.DATA_ROOT}/md{rocket.path_info}', os.R_OK):
-        return handle_md(rocket)
+    md_path = f'{orbit.DATA_ROOT}{rocket.path_info}'
+    if re.match("^(?!/cgit)(.*\.md)$", rocket.path_info) and os.access(md_path, os.R_OK):
+        return handle_md(rocket, md_path)
     else:
         return rocket.respond(HTTPStatus.NOT_FOUND, 'text/html', 'HTTP 404 NOT FOUND')
 
 def application(env, SR):
     rocket = orbit.Rocket(env, SR)
-
     if re.match("^(/login|/check|/logout/|/mail_auth)", rocket.path_info):
-        return handle_auth(rocket)
+        return handle_login(rocket)
     elif re.match("^/dashboard", rocket.path_info):
         return handle_dashboard(rocket)
     elif re.match("^/register", rocket.path_info):
