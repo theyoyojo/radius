@@ -2,9 +2,8 @@
 
 ORBIT_DB= 'orbit.db'
 
-SESSION_MINS	= 60
-SESSION_DAYS	= 0
+SESSION_LENGTH_MINUTES	= 180
 
-LOGO='/kdlp.png'
-CONFIG_STYLE='/style.epng'
-CONFIG_NAV_TABLE
+LOGO_PATH='/kdlp.png'
+
+STYLE_PATH='/style.css'

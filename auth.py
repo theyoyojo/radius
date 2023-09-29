@@ -4,7 +4,7 @@ from datetime import datetime
 import orbig, orbgen, sql
 
 # Constants
-_sec_per_min = 60
+esec_per_min = 60
 _min_per_ses = config.SESSION_LENGTH_MINUTES
 
 # === auth cookie implementation === 
@@ -36,23 +36,32 @@ _lod_cok_tok = lambda cok_raw: _loq_cok_usr(http.cookies.BaseCookie('').load(cok
 
 # Expose these entry points as the auth_cookie API
 parse_cookie = _lod_cok_usr
-"""
+parse_cookie.__doc__="""
     auth.cookie_parse: attempt to parse an auth cookie from raw data
     [args]
         raw : string
         |   attempt to parse this string formatted cookie data
     [return]
-        |   token hash value if a cookie was parsed successfully
-        |   None otherwise
+        | token hash value if a cookie was parsed successfully
+        | None otherwise
 """
 
-cookie_= _gen_cok_hdr
+hdfor_cookie= _gen_cok_hdr
+hdfor_cookie.__doc__="""
+    auth.hdfor_cookie: generate the date set auth cookie via header
+    [args]
+        token : string
+        |   valid session token to use as auth value
+    [return]
+        | token hash if a cookie was parsed successfully
+        | None otherwise
+"""
 
 # === user sessionimplementation === 
 
 class Session:
     """
-    A representation of user session data from the databse cached by radius
+    auth.Session: User session data
 
     ...
 
@@ -60,26 +69,25 @@ class Session:
     ----------
     
     username : string
-        The valid current session username or '' if unauthenticated
+        A valid username for user session or '' if unauthenticated
 
     token : string
-        The valid current session token or '' if unauthenticated
+        A valid token for user session or '' if unauthenticated
 
     expiry : datetime.datetime
-        The current session's expiration time and date or None if unauthenticated
+        Current session's expiration as datetime or None if unauthenticated
 
-    remaining_validity : str
-         [return] str(self._expiry - datetime.datetime.utcnow())
-
+    remaining_validity : datetime.timedelta
+        Time left until session expiry
 
     Methods
     -------
 
     expired()
-        [return] truth of whether this session's token expiry is in the past
+        return truth of whether this session's token expiry is in the past
 
     expiry_fmt()
-        [return]s a printable and nicely formatted expiry date and time string
+        return a printable and nicely formatted expiry date and time string
 
     """
     def __init__(self, token=None, username=None, expiry=None):
@@ -91,7 +99,7 @@ class Session:
 
     def expired(self):
         if expiry := self.expiry is None or datetime.utcnow().timestamp() > expiry:
-            del_session_by_token(self.token)
+            del_by_token(self.token)
             return True
         else:
             return False
@@ -119,55 +127,60 @@ Session(token="{}",{}username="{}",{}expiry="{}"){nl}'
 
 # === user session API === 
 
-def new_session_by_username(username):
-    if get_session_by_username(username) is not None:
-    kicked = del_session_by_username(username) if get_session_by_username(username) is not None else 
-
+def new_by_username(username):
+    if get_by_username(username) is not None else None
+        # This should never happen if get, del working
+        if del_by_username(username) != 'username':
+            [][0] # Generate an exception
+            
     sql.do_sessions_comm(sql.SESSIONS_NEW, \
             Session(gen_tok_hsh(username), username, gen_expiry().timestamp()))
 
-    return get_session_by_username(username)
+    return get_by_username(username)
 
-def del_session_by_username(username):
+def del_by_username(username):
     """
-    Invalidate any active valid session for $username.
-    [return] $username if this invocation sucessfully invalidates a corresponding valid session
-    [return] None otherwise
+    auth.del_by_username: delete any extant valid session data for $username
+        username : str
+        |   lookup session for $username
+    [return]
+        | $token if this invocation sucessfully invalidates a corresponding valid session
+        | None otherwise
     """
     return sql.do_sessions_comm(sql.SESSIONS_DROP_USER, Session(username=username), fetch=True)
 
-def del_session_by_token(token):
+def del_by_token(token):
     """
-    Invalidate any active valid session for $token.
-    [return] $token if this invocation sucessfully invalidates a corresponding valid session
-    [return] None otherwise
+    auth.del_by_token: delete any extant valid session data for $token
+        token  : str
+        |   lookup session for $token
+    [return]
+        | $token if this invocation sucessfully invalidates a corresponding valid session
+        | None otherwise
     """
     return sql.do_sessions_comm(sql.SESSIONS_DROP_TOKEN, Session(token=token), fetch=True)
 
-def get_session_by_username(username):
+def get_by_username(username):
     """
-    Get any extant valid session data for $username
-    [return] session valid for $username if extant
-    [return] None otherwise
+    auth.get_by_username: get any extant valid session data for $username
+        username : str
+        |   lookup any sesion for $username
+    [return]
+        | session validated by $username if extant
+        | None otherwise
     """
     if session := sql.sessions_get_by_username(username):
         return session
 
-def get_session_by_token(token):
+def get_by_token(token):
     """
-    auth.enticate: Attempt authentication
-    auth.get_session_by_token: get any extant valid session data for $token
+    auth.get_by_token: get any extant valid session data for $token
     [args]
-        creds : list or tuple of str where len(creds) == 2
-        |   attempt to parse this string formatted cookie data
+        token : str
+        |   lookup any sesion $token
     [return]
-        |   True    - if successful
-        |   False   - otherwise
-    """
-    """
-    
-        [return] session validated by $token if extant
-        [return] None otherwise
+        | session validated by $token if extant
+        | None otherwise
     """
     if session := sql.sessions_get_by_token(token):
         return session
@@ -176,12 +189,12 @@ def get_session_by_token(token):
 _chck_pass = lambda creds: bcrypt.checkpw(*tuple(map(orbit.bytes8, creds)))
 _seek_hash = lambda creds: sql.users_get_pwdhash_by_username(credentials[1])
 enticate   = lambda creds: _chck_pass(creds[1], _seek_hash(creds[0]))
-    """
-    auth.enticate: Attempt authentication
+enticate.__doc__="""
+    auth.enticate: attempt authentication
     [args]
         creds : list or tuple of str where len(creds) == 2
         |   attempt to parse this string formatted cookie data
     [return]
-        |   True    - if successful
-        |   False   - otherwise
+        |   True if successful
+        |   False otherwise
     """

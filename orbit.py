@@ -1,7 +1,7 @@
 #!/bin/env python3
 
 import requests, os, sys, http, urllib
-from config import CONFIG_SESSION_MINS, CONFIG_SESSION_DAYS
+from config import SESSION_LENGTH_MINUTES, LOGO_PATH, STYLE_PATH
 from urllib.parse import parse_qs
 
 # Application constants
@@ -16,7 +16,7 @@ DATA_ROOT = f'{ORBIT_PREFIX}{HOSTNAME}'
 
 class Rocket:
     """
-    Orbit user request context
+    orbit.Rocket: Orbit user request context
 
     ...
 
@@ -24,19 +24,13 @@ class Rocket:
     ----------
 
     path_info : str
-        Absolute server ppath requested by user
+        Absolute path requested by user
 
     queries : dict
         Dictionary of parsed URL queries (passsed by '?key1=value1&key2=value2' suffix)
 
-    user_token : str
-        The user submiitted session token if it exists, otherwise an empty string
-
-        self.token_from_user = None
-        self._session = None
-        self.alerts = None
-        self._msg = "(silence)"
-        self.headers = []
+    session : auth.Session
+        The current valid session token if it exists or None
 
     username : string
         The valid current session username or '' if unauthenticated
@@ -47,42 +41,42 @@ class Rocket:
     expiry : datetime.datetime
         The current session's expiration time and date or None if unauthenticated
 
-    remaining_validity : str
+    remaining_validity : dattime.timedelta
+         Time remaining remaining until session expiry
          return str(self._expiry - datetime.datetime.utcnow())
-
-    def __repr__(self):
-        return f'Session(token="{self.token}", username="{self.username}", expiry="{self.expiry}")'
-
-    def __str__(self):
-        return repr(self)
 
     Methods
     -------
 
     expiry_fmt()
         returns a printable and nicely formatted expiry date and time string
+
+    env_get(self, key):
+        try to get
+
+    def alert(self, msg):
+        self._alerts += [f'<hr /><i>{msg}</i><hr />']
+
     """
 
-    def __init__(self, environment, start_response):
-        self._environment = environment
-        self._start_response = start_response
+    def __init__(self, environ, start_res):
+        self._environ   = environ
+        self._start_res = start_res
         self._path_info = None
-        self._queires  = None
-        self._session = None
-
-        self.token_from_user = None
-        self.alerts = None
-        self._msg = "(silence)"
-        self.headers = []
-        self.format = lambda x: x
-        # Eventually, toggle CGI and WSGI
-        self._raw_body = lambda self: parse_qs(self.env_get['wsgi.input'].read())
-	form_data = parse_qs(env['wsgi.input'].read(int(env['CONTENT_LENGTH'])))
+        self._queires   = None
+        self._session   = None
+        self._from_user = None
+        self._alerts    = None
+        self._msg       = "(silence)"
+        self._headers   = []
+        self._format    = lambda x: x
+        # Eventually, toggle CGI or WSGI
+        self._raw_body  = lambda self: parse_qs(self.env_get('wsgi.input').read())
 
 
-    def __repr__(self, tab='', nl='', end='')
+    def __repr__(self, tab='', nl='', end=''):
         return ( f'ROCK ({nl}'
-                 f'COOK:{tab}{self.token_from_user}{nl}'
+                 f'COOK:{tab}{self._user_token}{nl}'
                  f'SESH:{tab}{str(self._session)}{nl}'
                  f'METH:{tab}{self._method_str()}{nl}'
                  f'HEAD:{tab}{self.headers}{nl}'
@@ -98,7 +92,7 @@ class Rocket:
         return self._environment.get(key, '')
 
     def alert(self, msg):
-        alerts += [f'<hr /><i>{msg}</i><hr />']
+        self._alerts += [f'<hr /><i>{msg}</i><hr />']
 
     def msg(self, msg):
         self._msg = msg
@@ -116,10 +110,8 @@ class Rocket:
             self._queries = self.env_get("QUERY_STRING")
         return self._queries
 
-
-
     def _token_from_cookie(self):
-        if (auth = auth.load_cookie(self.env_get) is not None
+        if (auth := auth.load_cookie(self.env_get)):
             self._user_token = auth.value
             return self._user_token
 
@@ -138,8 +130,8 @@ class Rocket:
     @property
     def session(self):
         if self._session is None:
-            if self._token_from_user()
-                self._session = auth.get_session_by_token(self._user_token)
+            if self._token_from_user():
+                self._session = auth.get_by_token(self._user_token)
             else:
                 return None
         return self._session
@@ -160,29 +152,26 @@ class Rocket:
     # or directly attempt login
     def launch(self, username='', password=''):
         if self.is_post_req():
-            data = self._`
-            # get actual urlencoded body content
             urldecode = lambda key: html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
             username = urldecode('username')
             password = urldecode('password')
         self._session = auth.login(username, password)
-        if self.session:
-            self._set_cookie_header(auth.gen_cookie(self.token))
-            self.extra_headers += self._cookie
- [auth.gen_cookie("auth", session.token)
+        if self.token:
+            self.headers += auth.hdfor_cookie(self.token)
+        return self.session is not None
 
     # Renew current sesssion and set user auth cookie accordingly
     def refuel(self):
-        auth.del_session_by_username(self.username)
+        auth.del_by_username(self.username)
         self._session = auth.new_sesion_by_username(self.username)
         if self.session:
-            self.extra_headers += auth.gen_cookie('auth', session.token)
+            self.extra_headers += auth.gen_cookie(self.token)
         return self.session
 
     # Logout of current session and clear user auth cookie
     def retire(self):
         self.extra_headers += auth.gen_cookie('auth', '')
-        return auth.del_session_by_username(self.username)
+        return auth.del_by_username(self.username)
 
     # Set appropriate headers
     def parse_content_type(self, content_type):
@@ -196,22 +185,23 @@ class Rocket:
             case ['auth', 'badcreds']:
                 self.headers += [('Auth-Status', 'Invalid Credentials')]
             case ['auth', auth_port]:
-                self.headers += [('Auth-Status', 'OK'), ('Auth-Port', auth_port),
-                        ('Auth-server', '127.0.0.1')]
+                self.headers += [('Auth-Status', 'OK'),
+                                 ('Auth-Port',    auth_port),
+                                 ('Auth-server', '127.0.0.1')]
             case _:
                 return False
         return True
 
     def format_html(self, doc):
         # generate a reproduction of the original header without too much abstraction for initial version
-        TITLE = 'Kernel Development Learning Pipeline'
-        HR = '<hr />'
-        BR = '<br />'
-        APP_VERSION_SRC = f'{APPLICATION} {VERSION} {SOURCE}'
 
-        # Prepare meta
-        LINK_STYLE_CSS = '<link rel="stylesheet" type="text/css" href="/style.css />'
-        META_CHARSET_UTF8 = '<meta charset="UTF-8">'
+        # general constant 
+        TITLE   = 'Kernel Development Learning Pipeline'
+        HR      = '<hr />'
+        BR      = '<br />'
+        APP_VERSION_SRC     = f'{APPLICATION} {VERSION} {SOURCE}'
+        LINK_STYLE_CSS      = '<link rel="stylesheet" type="text/css" href="/style.css />'
+        META_CHARSET_UTF8   = '<meta charset="UTF-8">'
 
         # Prepare logo
         logo_div_doc  = ''
@@ -222,22 +212,23 @@ class Rocket:
         # Prepare nav
         # FIXME: consider config
         nav_kvs = [
-            (       "/index.md", "Home"     ),
-            ("/course/index.md", "Course"   ),
-            (          "/login", "Login"    ),
-            (       "/register", "Register" ),
-            (      "/dashboard", "Dashboard"),
-            (         "/who.md", "Who"      ),
-            (        "/info.md", "Info"     ),
-            (           "/cgit", "Git"      )]
-        nav_btn_gen =    lambda: "".join([orbgen.nav_button(pair[0], pair[1]) for pair in nav_kvs])
-        nav_div_gen =    lambda: f"{HR}\n{orbgen.div(' class="nav" ', nav_btn_gen())}\n{HR}\n"
+            (       '/index.md', 'Home'     ),
+            ('/course/index.md', 'Course'   ),
+            (          '/login', 'Login'    ),
+            (       '/register', 'Register' ),
+            (      '/dashboard', 'Dashboard'),
+            (         '/who.md', 'Who'      ),
+            (        '/info.md', 'Info'     ),
+            (           '/cgit', 'Git'      )]
+        nav_btn_gen =    lambda: ''.join([orbgen.nav_button(pair[0], pair[1]) for pair in nav_kvs])
+        nav_div_gen =    lambda: f'{HR}\n{orbgen.div("nav", nav_btn_gen())}\n{HR}\n'
 
         # Prepare footer
         msg_doc  = ''
         msg_doc += [('application', APPLICATION)]
+        msg_doc += [(    'version', VERSION)]
         msg_doc += [(     'source', SOURCE)]
-        msg_doc += [(        'msg', self._msg)])
+        msg_doc += [(        'msg', self._msg)]
         msg_fmt = lambda kv: orbgen.code(attrs='', c='{} = {}').format(*kv)
         msg_blk = lambda brdr, kvs: brdr + ''.join([msg_fmt(kv) for kv in kvs])
 

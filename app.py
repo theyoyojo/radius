@@ -61,7 +61,7 @@ def handle_check(rocket):
 def handle_logout(rocket):
     if rocket.queryget('username') and self.session:
         return rocket.respond(HTTPStatus.OK, 'text/plain',
-            auth.del_session_by_username(self.username))
+            auth.del_by_username(self.username))
     else:
         return rocket.respond(HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS, 'text/plain', 'null')
 
@@ -76,7 +76,8 @@ def handle_stub(rocket, more=[]):
 def handle_register(rocket):
     return handle_stub(rocket, [f'{orbgen.code(OLD_NOTES)}'])
 
-OLD_NOTES="""
+# TODO: use this to implement register
+_OLD_NOTES="""
 	form_data = parse_qs(env['wsgi.input'].read(int(env['CONTENT_LENGTH'])))
 	print(form_data)
 	if b'student_id' not in form_data or len(form_data[b'student_id']) != 1:
