@@ -53,8 +53,8 @@ def table(c, i=0):
 def img(src, alt='', cls='', attrs='')
     return f'<img src="{src}" alt="{alt}" class="{class}" {attrs} />'
 
-def div(attr="", c="", i=0):
-    return oxo(i, f'<div{attr}>', c, '</div>')
+def div(cls='radius_default' attr="", c="", i=0):
+    return oxo(i, f'<div class="{cls}" {attr} >', c, '</div>')
 
 def code(attr="", c="", i=0):
     return oxo(i, f'<code{attr}>', c, '</code>')
@@ -126,11 +126,11 @@ def cookie_info_table(session):
         ('Remaining Validity', session.remaining_validity)])
 
 def logout_buttons():
-    return form(' id="logout" method="get" action="/login" ', \
-        input_(' type="hidden" name="logout" value="true" ') + \
-        button('Logout', 0, ' type="submit" class="logout" ')) + \
+    return form(' id="logout" method="get" action="/login" ',   \
+        input_(' type="hidden" name="logout" value="true" ')+   \
+        button('Logout', 0, ' type="submit" class="logout" ')) +\
         form(' id="rewnew" method="get" action="/login" ',
-        input_(' id="renew" method="get" action="/" ') + \
+        input_(' id="renew" method="get" action="/" ')         +\
         button('Renew', 0, ' type="submit" class="renew" '))
 
 def form_welcome(session):

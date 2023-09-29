@@ -109,14 +109,3 @@ def try_handle_md(rocket):
         return handle_md(rocket, md_path)
     else:
         return rocket.respond(HTTPStatus.NOT_FOUND, 'text/html', 'HTTP 404 NOT FOUND')
-
-def application(env, SR):
-    rocket = orbit.Rocket(env, SR)
-    if re.match("^(/login|/check|/logout/|/mail_auth)", rocket.path_info):
-        return handle_login(rocket)
-    elif re.match("^/dashboard", rocket.path_info):
-        return handle_dashboard(rocket)
-    elif re.match("^/register", rocket.path_info):
-        return handle_register(rocket)
-    else:
-        return try_handle_md(rocket)
