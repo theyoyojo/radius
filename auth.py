@@ -128,6 +128,14 @@ Session(token="{}",{}username="{}",{}expiry="{}"){nl}'
 # === user session API === 
 
 def new_by_username(username):
+    """
+    auth.new_by_username: create a new valid session for $username
+        username : str
+        |   assume $username is authentiated by caller and from this value construct a new session
+    [return]
+        | A valid session token for $username if session creation is successfull
+        | None otherwise
+    """
     if get_by_username(username) is not None else None
         # This should never happen if get, del working
         if del_by_username(username) != 'username':
