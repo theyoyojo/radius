@@ -1,7 +1,8 @@
-#!/:in/env python3
+#!/bin/env python3
 
 import markdown, os, sys, re
 import orbit, auth, orbgen, isis
+
 from http import HTTPStatus
 
 def handle_welcome(rocket):
@@ -33,7 +34,7 @@ def handle_login(rocket):
     return rocket.respond(HTTPStatus.OK, 'text/html', orbgen.gen_form())
 
 def handle_mail_auth(rocket):
-    # This should be invariant when ngninx is configured properly
+    # This should be invariant when ngninx is orbcfgured properly
     mail_env_vars = ('HTTP_AUTH_USER' 'HTTP_AUTH_PASS', 'HTTP_AUTH_PROTOCOL', 'HTTP_AUTH_METHOD')
     [username, passwprd, protocol, method] = [rocket.envget(key) for key in mail_env_vars]
 

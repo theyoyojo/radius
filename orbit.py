@@ -1,22 +1,12 @@
 #!/bin/env python3
 
-import requests, os, sys, http, urllib
-from config import SESSION_LENGTH_MINUTES, LOGO_PATH, STYLE_PATH
+import requests, os, sys, http, urllib, radius
 from urllib.parse import parse_qs
-
-# Application constants
-# TODO: move to config?
-
-APPLICATION = 'radius'
-VERSION = '0.1'
-SOURCE = 'https://github.com/underground-software/radius'
-ORBIT_PREFIX = os.environ.get('ORBIT_PREFIX')
-HOSTNAME = os.environ.get('SRVNAME')
-DATA_ROOT = f'{ORBIT_PREFIX}{HOSTNAME}'
 
 class Rocket:
     """
-    orbit.Rocket: Orbit user request context
+    radius.Rocket: Radius user request context
+                   resposible for ensuring authention is performed correctly
 
     ...
 
@@ -210,16 +200,8 @@ class Rocket:
         logo_div_gen  = lambda: orbgen.div(' class="logo" ', logo_div_doc)
 
         # Prepare nav
-        # FIXME: consider config
-        nav_kvs = [
-            (       '/index.md', 'Home'     ),
-            ('/course/index.md', 'Course'   ),
-            (          '/login', 'Login'    ),
-            (       '/register', 'Register' ),
-            (      '/dashboard', 'Dashboard'),
-            (         '/who.md', 'Who'      ),
-            (        '/info.md', 'Info'     ),
-            (           '/cgit', 'Git'      )]
+        # FIXME: consider putting in config
+        nav_kvs = radius.config.DEFINE_NAV_BUTTONS
         nav_btn_gen =    lambda: ''.join([orbgen.nav_button(pair[0], pair[1]) for pair in nav_kvs])
         nav_div_gen =    lambda: f'{HR}\n{orbgen.div("nav", nav_btn_gen())}\n{HR}\n'
 

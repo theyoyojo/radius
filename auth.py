@@ -1,11 +1,11 @@
 import sys, datetime, bcrypt, hashlib
 from datetime import datetime
 
-import orbit, orbdb, config
+import orbit, orbdbs, orbcfg
 
 # Constants
 sec_per_min = 60
-_min_per_ses = config.SESSION_LENGTH_MINUTES
+_min_per_ses = orbcfg.SESSION_MINUTES
 
 # === auth cookie implementation === 
 
@@ -15,7 +15,7 @@ _min_per_ses = config.SESSION_LENGTH_MINUTES
 _gen_hsh_inp = lambda username: orbit.bytes8(username + str(datetime.now()))
 _gen_tok_hsh = lambda username: hashlib.sha256(_gen_hsh_inp(username)).hexdigest()
 
-# Generate the expiration datetime pair from the value loaded from configuration
+# Generate the expiration datetime pair from the value loaded from orbcfguration
 # The first elenent is the dateime processed through a stanard formatstring
 # The second element is number of seconds until the expiration datetime
 _fmt_cok_tme = '%a, %d %b %Y %H:%M:%S GMT'
@@ -29,7 +29,7 @@ _gen_cok_tme = lambda: (gen_exp_now().strftime(fmt_cok_tme), sec_per_min * min_p
 # to a subdomain of the server root.
 _fmt_cok_val = 'auth={}; Expires={}; Max-Age={}; Path=/'
 _gen_cok_val = lambda cok_val : fmt_cok_val.format(value, *gen_cok_tme())
-_gen_cok_hrd = lambda cok_dat : [('Set-Cookie', gen_cok_val(cok_dat))]
+_gen_cok_hdr = lambda cok_dat : [('Set-Cookie', gen_cok_val(cok_dat))]
 
 _lod_cok_usr = lambda cok_usr: cok_usr.get('auth', None)
 _lod_cok_tok = lambda cok_raw: _loq_cok_usr(http.cookies.BaseCookie('').load(cok_raw))
@@ -116,12 +116,11 @@ class Session:
          return str(self._expiry - datetime.utcnow())
 
     def __repr__(self, tab='', nl='', end=''):
-        return ( f'SES:{nl}'
-                 f'USR:{tab}{self._msg}{nl}'
-                 f'TOK:{tab}{self._queries}{nl}'
-                 f'EXP:{tab}{self._path_info}{nl}'
-                 f'){end}')
-                f'){end}')
+        return ( f'{tab}SES:{nl}'
+                 f'{tab}USR:{tab}{self._msg}{nl}'
+                 f'{tab}TOK:{tab}{self._queries}{nl}'
+                 f'{tab}EXP:{tab}{self._path_info}{nl}'
+                 f'{tab}){end}')
 
     def __str__(self):
         return repr(self, tab='\t', nl='\n\t', end='\n')
