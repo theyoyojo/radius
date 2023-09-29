@@ -1,6 +1,6 @@
 #!/bin/env python3
 
-ORBIT_DB= 'orbit.db'
+ORBIT_DATABSE = 'orbit.db'
 
 SESSION_LENGTH_MINUTES	= 180
 

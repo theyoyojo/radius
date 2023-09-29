@@ -83,7 +83,7 @@ class Rocket:
                  f'MESG:{tab}{self._msg}{nl}'
                  f'QURY:{tab}{self._queries}{nl}'
                  f'PATH:{tab}{self._path_info}{nl}'
-                 f'){end}' )
+                 f'){end}')
 
     def __str__(self):
         return repr(self, tab='\t', nl='\n\t', end='\n')
