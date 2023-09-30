@@ -1,5 +1,10 @@
 
 import radius_rocket
+rocket = radius_rocket.rocket
 
-Rocket = radius_rocket.Rocket
 
+import radius_configuration
+import radius_configuration.configurable as config
+whoami = radius_configuration.constants.whoami
+version = radius_configuration.constants.version
+source  = radius_configuration.constants.source

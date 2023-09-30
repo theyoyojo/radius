@@ -1,11 +1,13 @@
 import sys, datetime, bcrypt, hashlib
 from datetime import datetime
 
+import radius
+
 import orbit, orbdbs, orbcfg
 
 # Constants
 sec_per_min = 60
-_min_per_ses = orbcfg.SESSION_MINUTES
+_min_per_ses = radius.config.sesh_mins
 
 # === auth cookie implementation === 
 

@@ -3,7 +3,7 @@
 import requests, os, sys, http, urllib, radius
 from urllib.parse import parse_qs
 
-class Rocket:
+class rocket:
     """
     radius.Rocket: Radius user request context
                    resposible for ensuring authention is performed correctly
@@ -44,9 +44,6 @@ class Rocket:
     env_get(self, key):
         try to get
 
-    def alert(self, msg):
-        self._alerts += [f'<hr /><i>{msg}</i><hr />']
-
     """
 
     def __init__(self, environ, start_res):
@@ -56,7 +53,6 @@ class Rocket:
         self._queires   = None
         self._session   = None
         self._from_user = None
-        self._alerts    = None
         self._msg       = "(silence)"
         self._headers   = []
         self._format    = lambda x: x
@@ -80,9 +76,6 @@ class Rocket:
 
     def env_get(self, key):
         return self._environment.get(key, '')
-
-    def alert(self, msg):
-        self._alerts += [f'<hr /><i>{msg}</i><hr />']
 
     def msg(self, msg):
         self._msg = msg
@@ -201,16 +194,16 @@ class Rocket:
 
         # Prepare nav
         # FIXME: consider putting in config
-        nav_kvs = radius.config.DEFINE_NAV_BUTTONS
+        nav_kvs = radius.config.NAV_BUTTONS
         nav_btn_gen =    lambda: ''.join([orbgen.nav_button(pair[0], pair[1]) for pair in nav_kvs])
         nav_div_gen =    lambda: f'{HR}\n{orbgen.div("nav", nav_btn_gen())}\n{HR}\n'
 
         # Prepare footer
         msg_doc  = ''
-        msg_doc += [('application', APPLICATION)]
-        msg_doc += [(    'version', VERSION)]
-        msg_doc += [(     'source', SOURCE)]
-        msg_doc += [(        'msg', self._msg)]
+        msg_doc += [( 'whoami', radius.whoami)]
+        msg_doc += [('version', radius.version)]
+        msg_doc += [( 'source', radius.source)]
+        msg_doc += [(    'msg', self._msg)]
         msg_fmt = lambda kv: orbgen.code(attrs='', c='{} = {}').format(*kv)
         msg_blk = lambda brdr, kvs: brdr + ''.join([msg_fmt(kv) for kv in kvs])
 
