@@ -3,8 +3,6 @@ from datetime import datetime
 
 import radius
 
-import orbit, orbdbs, orbcfg
-
 # Constants
 sec_per_min = 60
 _min_per_ses = radius.config.sesh_mins
@@ -14,7 +12,7 @@ _min_per_ses = radius.config.sesh_mins
 # Under the assumption of the impossibility of two invocations of this function
 # with equivalent values calclated from the 'username + str(datetime.now())' expression,
 # this function guarantees unique session tokens for every successful login by $userame
-_gen_hsh_inp = lambda username: orbit.bytes8(username + str(datetime.now()))
+_gen_hsh_inp = lambda username: (username + str(datetime.now()))
 _gen_tok_hsh = lambda username: hashlib.sha256(_gen_hsh_inp(username)).hexdigest()
 
 # Generate the expiration datetime pair from the value loaded from orbcfguration

@@ -2,25 +2,25 @@
 
 import sqlite, radius
 
-# <shorthand> => <sql_table_name>
+# nickname  table name
 # USR => users
 # ASN => assignments
 # SUB => submissions
 # REG => newusers
 
-def _sqlite3(command, _set=False, _get=False):
-    result=None
-    db_con = sqlite3.connect(radius.config.PATH_LOCAL_DATABASE)
-    db_cur0 = db_con.cursor()
-    db_cur1 = db_cur0.execute(command)
-    if _get:
-        result=db_cur1.fetchall()
-    if _set:
-        db_cur2 = db_cur1.execute("COMMIT;")
-    db_con.close()
+def _sqlite3(command, set_=False, get_=False):
+    dat = None
+    con = sqlite3.connect(radius.config.PATH_LOCAL_DATABASE)
+    new = con.cursor()
+    ret = new.execute(command)
+    if get_:
+        dat = ret.fetchall()
+    if set_:
+        ret.execute("COMMIT;")
+    con.close()
     return result
-_set                   = lambda cmd: _sqlite3(c, _set=(True))
-_get                   = lambda cmd: _sqlite3(c, _get=True))
+_set                   = lambda cmd: _sqlite3(c, _set=True)
+_get                   = lambda cmd: _sqlite3(c, _get=True)
 
 # session table interface
                                 
@@ -110,7 +110,6 @@ FROM submissions;
 """.strip()
 sub_get                 = lambda    : _get(SUB_GET)
 
-
 SUB_INS="""
 INSERT INTO submissions (sub_id, username, timestamp, _from, _to, email_ids, subjects)
 VALUES ("{}","{}","{}","{}","{}","{}","{}");
@@ -131,6 +130,8 @@ WHERE user = "{}";
 """.strip()
 sub_getby_username      = lambda usr: _get(SUB_GETBY_USERNAME.format(usr))
 
+# assignment table interface
+
 ASN_GETBY_WEBID="""
 SELECT web_id, email_id
 FROM assignments
@@ -150,6 +151,8 @@ SELECT *
 FROM assignments;
 """.strip()
 asn_get                 = lambda    : _get(ASN_GET)
+
+# registration table inferface
 
 REG_INS="""
 INSERT VALUES username, password, student_id = ("{}","{}","{}")

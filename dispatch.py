@@ -1,7 +1,7 @@
 #!/bin/env python3
 
 import markdown, os, sys, re
-import orbit, auth, orbgen, isis
+import orbit, auth, orbgen, dashboard
 
 from http import HTTPStatus
 
@@ -67,7 +67,7 @@ def handle_logout(rocket):
         return rocket.respond(HTTPStatus.UNAVAILABLE_FOR_LEGAL_REASONS, 'text/plain', 'null')
 
 def handle_dashboard(rocket):
-    return rocket.respond(HTTPStatus.OK, 'text/html', isis.isis(rocket.user))
+    return rocket.respond(HTTPStatus.OK, 'text/html', dashboard.dashboard(rocket.user))
 
 def handle_stub(rocket, more=[]):
         make_cont = lambda meth_path: f'<h3>Developmennt sub for {meth_path} </h3>{"".join(more)}'

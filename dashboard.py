@@ -8,7 +8,7 @@ from sql import submissions_get_by_username, assignments_get_all
 
 from orbgen import table
 
-def isis_table(ass_pair, subd):
+def dashboard_table(ass_pair, subd):
     fmt = [('Submission IDs', 'Time Recieved', 'Summary',  'Email IDs', 'Grade')]
     try:
         for subgroup in subd[ass_pair[0]]:
@@ -26,7 +26,7 @@ def isis_table(ass_pair, subd):
     return table(fmt)
 
 # REVISION INDEX | DATETIME RECV | COMMENTS | GRADE
-def isis(user):
+def dashboard(user):
     subs = submissions_get_by_username(user)
     print('GET SUBS', subs)
     subd = {}
@@ -46,12 +46,12 @@ def isis(user):
 
     for ass_pair in assiginments_get_all():
         output += f'<h3>{ass_pair[0]}: {ass_pair[1]}</h3>\n'
-        output += isis_table(ass_pair, subd)
+        output += dashboard_table(ass_pair, subd)
 
     return output
 
 def main():
-    print(isis("joel"))
+    print(dashboard("joel"))
 
 if __name__ == "__main__":
     main()
