@@ -77,9 +77,6 @@ def button(c, i=0, a=''):
 def input_(attr=''):
     return f'<input {attr} >'
 
-def bytes8(string):
-	return bytes(string, "UTF-8")
-
 def str8(string):
 	return str(string, "UTF-8")
 

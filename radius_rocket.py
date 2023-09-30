@@ -80,8 +80,11 @@ class rocket:
     def msg(self, msg):
         self._msg = msg
 
-    def destination(self):
-        return ['UML', 'LFX'][sql.users_get_lfx_by_username(username) is not None]
+    # this handles our two sesion case,
+    # but this is the place to extend for more general multi-session usage
+    def for(self):
+        if self.session:
+            return ['UML', 'LFX'][radius.db.usr_getif_lfx_username(username) is not None]
 
     @property
     def method(self):
@@ -135,7 +138,7 @@ class rocket:
     # or directly attempt login
     def launch(self, username='', password=''):
         if self.is_post_req():
-            urldecode = lambda key: html.escape(str8(self.queries.get(bytes8(key), [b''])[0]))
+            urldecode = lambda key: html.escape(str8(self.queries.get(radius.encode(key), [b''])[0]))
             username = urldecode('username')
             password = urldecode('password')
         self._session = auth.login(username, password)
@@ -229,4 +232,4 @@ class rocket:
                 code = http.HTTPStatus.INTERNAL_SERVER_ERROR
                 document = 'ERROR: BAD RADIUS CONTENT DESCRIPTION'
         self._start_response(f'{code.value} {code.phrase}', self.headers)
-        return [bytes8(document)]
+        return [radius.encode(document)]
